@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2">
+  <file source-language="en" target-language="fr" datatype="plaintext" original="ng2.template">
+    <body>
+      <trans-unit id="1">
+        <source>Hello</source>
+        <target></target>
+      </trans-unit>
+      <trans-unit id="2">
+        <source>World</source>
+        <target>World</target>
+      </trans-unit>
+      <trans-unit id="3">
+        <source>Goodbye</source>
+        <target state="new">Goodbye</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
