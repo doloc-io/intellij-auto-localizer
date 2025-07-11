@@ -22,6 +22,8 @@ import com.intellij.openapi.vfs.VirtualFile
 import io.doloc.intellij.api.DolocRequestBuilder
 import io.doloc.intellij.http.HttpClientProvider
 import io.doloc.intellij.service.DolocSettingsService
+import io.doloc.intellij.settings.DolocSettingsState
+import io.doloc.intellij.xliff.LightweightXliffScanner
 import io.doloc.intellij.settings.DolocConfigurable
 import java.net.http.HttpResponse
 
@@ -109,10 +111,29 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
                 indicator.isIndeterminate = true
 
                 try {
+                    val settings = DolocSettingsState.getInstance()
+                    val scanResult = LightweightXliffScanner().scan(
+                        file,
+                        settings.xliff12UntranslatedStates,
+                        settings.xliff20UntranslatedStates
+                    )
+
+                    val untranslatedStates = if (scanResult.isXliff2) {
+                        settings.xliff20UntranslatedStates
+                    } else {
+                        settings.xliff12UntranslatedStates
+                    }
+
+                    val newState = if (scanResult.isXliff2) {
+                        settings.xliff20NewState
+                    } else {
+                        settings.xliff12NewState
+                    }
+
                     val request = DolocRequestBuilder.createTranslationRequest(
                         file,
-                        //   untranslatedStates = settingsService.getUntranslatedStates(),
-                        //   newState = settingsService.getNewState()
+                        untranslatedStates = untranslatedStates,
+                        newState = newState
                     )
 
                     // Send request

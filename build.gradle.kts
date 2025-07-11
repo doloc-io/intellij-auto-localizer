@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.doloc"
-version = "1.0.1"
+version = "1.0.2"
 
 repositories {
     mavenCentral()
@@ -40,7 +40,9 @@ intellijPlatform {
         }
 
         changeNotes = """
-      Initial version
+      1.0.2
+      - Use settings in translation query
+      - Detect XLIFF version automatically
     """.trimIndent()
     }
 }

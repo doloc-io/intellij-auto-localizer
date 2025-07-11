@@ -9,23 +9,27 @@ import javax.xml.parsers.SAXParserFactory
  * Lightweight scanner for XLIFF files that detects untranslated units
  */
 class LightweightXliffScanner {
+    data class ScanResult(
+        val hasUntranslatedUnits: Boolean,
+        val isXliff2: Boolean
+    )
+
     /**
-     * Scans an XLIFF file to detect untranslated units
+     * Scans an XLIFF file to detect untranslated units and determine version
      * @param file The XLIFF file to scan
-     * @param useXliff2Settings Force using XLIFF 2.0 settings (otherwise auto-detect)
-     * @return true if untranslated units are found, false otherwise
+     * @return [ScanResult] with detection info
      */
     fun scan(
         file: VirtualFile,
         xliff12UntranslatedStates: Set<String>,
         xliff20UntranslatedStates: Set<String>,
-    ): Boolean {
+    ): ScanResult {
         val handler = XliffHandler(xliff12UntranslatedStates, xliff20UntranslatedStates)
         val factory = SAXParserFactory.newInstance()
         factory.isNamespaceAware = true
         val parser = factory.newSAXParser()
         parser.parse(file.contentsToByteArray().inputStream(), handler)
-        return handler.hasUntranslatedUnits
+        return ScanResult(handler.hasUntranslatedUnits, handler.isXliff2Detected)
     }
 
     private class XliffHandler(
@@ -37,7 +41,7 @@ class LightweightXliffScanner {
         private var inTarget = false
         private var currentSourceValue = ""
         private var currentTargetValue = ""
-        private var isXliff2Detected = false
+        var isXliff2Detected = false
 
         // Determine which untranslated states to use based on XLIFF version
         private val untranslatedStates: Set<String>
