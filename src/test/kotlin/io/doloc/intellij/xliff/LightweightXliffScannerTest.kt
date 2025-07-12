@@ -23,7 +23,13 @@ class LightweightXliffScannerTest {
   </file>
 </xliff>"""
         )
-        assertTrue(scanner.scan(mockVirtualFile, setOf("no-state_empty-target"), setOf("no-state_empty-target")))
+        val result = scanner.scan(
+            mockVirtualFile,
+            setOf("no-state_empty-target"),
+            setOf("no-state_empty-target")
+        )
+        assertTrue(result.hasUntranslatedUnits)
+        assertFalse(result.isXliff2)
     }
     
     @Test
@@ -41,7 +47,9 @@ class LightweightXliffScannerTest {
   </file>
 </xliff>"""
         )
-        assertTrue(scanner.scan(mockVirtualFile, setOf("new"), setOf("new")))
+        val result = scanner.scan(mockVirtualFile, setOf("new"), setOf("new"))
+        assertTrue(result.hasUntranslatedUnits)
+        assertFalse(result.isXliff2)
     }
 
     @Test
@@ -68,19 +76,24 @@ class LightweightXliffScannerTest {
 </xliff>
 """
         )
-        assertFalse(scanner.scan(mockVirtualFile, setOf(
-            "new",
-            "needs-translation",
-            "needs-l10n",
-            "needs-adaptation",
-            "no-state_target-equals-source",
-            "no-state_empty-target"
-        ), setOf(
-            "initial",
-            "no-state_target-equals-source",
-            "no-state_empty-target"
+        val result = scanner.scan(
+            mockVirtualFile,
+            setOf(
+                "new",
+                "needs-translation",
+                "needs-l10n",
+                "needs-adaptation",
+                "no-state_target-equals-source",
+                "no-state_empty-target"
+            ),
+            setOf(
+                "initial",
+                "no-state_target-equals-source",
+                "no-state_empty-target"
+            )
         )
-        ))
+        assertFalse(result.hasUntranslatedUnits)
+        assertFalse(result.isXliff2)
     }
 
     @Test
@@ -111,17 +124,23 @@ class LightweightXliffScannerTest {
 </xliff>
 """
         )
-        assertTrue(scanner.scan(mockVirtualFile,setOf(
-            "new",
-            "needs-translation",
-            "needs-l10n",
-            "needs-adaptation",
-            "no-state_target-equals-source",
-            "no-state_empty-target"
-        ), setOf(
-            "initial",
-            "no-state_target-equals-source",
-            "no-state_empty-target"
-        ) ))
+        val result2 = scanner.scan(
+            mockVirtualFile,
+            setOf(
+                "new",
+                "needs-translation",
+                "needs-l10n",
+                "needs-adaptation",
+                "no-state_target-equals-source",
+                "no-state_empty-target"
+            ),
+            setOf(
+                "initial",
+                "no-state_target-equals-source",
+                "no-state_empty-target"
+            )
+        )
+        assertTrue(result2.hasUntranslatedUnits)
+        assertTrue(result2.isXliff2)
     }
 }

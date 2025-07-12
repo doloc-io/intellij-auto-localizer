@@ -66,11 +66,12 @@ class DolocFileListener : BulkFileListener {
                 return
             }
 
-            val hasUntranslated = scanner.scan(
-                file, DolocSettingsState.getInstance().xliff12UntranslatedStates,
+            val scanResult = scanner.scan(
+                file,
+                DolocSettingsState.getInstance().xliff12UntranslatedStates,
                 DolocSettingsState.getInstance().xliff20UntranslatedStates
             )
-            if (hasUntranslated) {
+            if (scanResult.hasUntranslatedUnits) {
                 // Record notification time to prevent duplicates
                 recentNotifications[file.path] = Instant.now()
 
