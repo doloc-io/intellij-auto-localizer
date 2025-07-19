@@ -16,9 +16,8 @@
 <p>Automatically translate XLIFF (.xlf) files.
 Uses existing translations to generate accurate and context-aware translations.
 High quality localization with one click!</p>
-
+<h3>Key features:</h3>
 <p>
-Main features:
 <ul>
   <li>"Translate with Auto Localizer" action in the context menu of XLIFF files</li>
   <li>Supports XLIFF 1.2 and XLIFF 2.0 formats</li>
@@ -28,12 +27,10 @@ Main features:
   <li>Free for translation files with up to 100 texts</li>
 </ul>
 </p>
+<h3>Getting started:</h3>
 <p>
-To configure, open <b>File | Settings | Tools | Auto Localizer</b>.
-</p>
-<p>
-Currently, a (free) account on <a href="https://doloc.io">doloc.io</a> is required to get an API key and use the plugin.
-We are working on anonymous usage without an account.
+1. Create a (free) account on <a href="https://doloc.io">doloc.io</a> (required to get an API key to use the plugin, we are working on anonymous usage without an account).
+2. To configure, open <b>File | Settings | Tools | Auto Localizer</b>.
 </p>
   ]]></description>
 
