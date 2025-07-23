@@ -25,6 +25,7 @@ import io.doloc.intellij.service.DolocSettingsService
 import io.doloc.intellij.settings.DolocSettingsState
 import io.doloc.intellij.xliff.LightweightXliffScanner
 import io.doloc.intellij.settings.DolocConfigurable
+import io.doloc.intellij.util.utmUrl
 import java.net.http.HttpResponse
 
 class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
@@ -67,7 +68,7 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
                 NotificationType.ERROR,
                 object : AnAction("Visit doloc.io/account") {
                     override fun actionPerformed(e: AnActionEvent) {
-                        BrowserUtil.browse("https://doloc.io/account")
+                        BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_no_token"))
                     }
                 },
                 object : AnAction("Open Settings") {
@@ -169,7 +170,7 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
                             NotificationType.ERROR,
                             object : AnAction("Visit doloc.io/account") {
                                 override fun actionPerformed(e: AnActionEvent) {
-                                    BrowserUtil.browse("https://doloc.io/account")
+                                    BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_quota_exceeded"))
                                 }
                             }
                         )

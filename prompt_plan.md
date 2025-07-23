@@ -82,7 +82,7 @@ Each chunk (C#) is ≤ 1 dev-day; each step (S#.#) is \~30-90 mins.
 ### C9 — Quota exceeded dialog
 
 * **S9.1** Intercept HTTP 429 / quota header.
-* **S9.2** Show modal dialog; *Upgrade* opens browser `https://doloc.io/account?upgradeToken=…`.
+* **S9.2** Show modal dialog; *Upgrade* opens browser `https://doloc.io/account?upgradeToken=…&utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=quota_dialog`.
 * **S9.3** Log metric to Event Log.
 
 ### C10 — Release engineering
@@ -247,7 +247,7 @@ Handle free-tier limits.
 2. show modal dialog:
    “Quota used up. Upgrade?” with buttons Upgrade / Cancel.
 3. Upgrade button opens browser at
-   `https://doloc.io/account`.
+   `https://doloc.io/account?utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=quota_dialog`.
 ```
 
 ---

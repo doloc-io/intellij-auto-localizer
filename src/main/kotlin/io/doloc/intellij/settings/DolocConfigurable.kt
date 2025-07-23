@@ -5,6 +5,7 @@ import com.intellij.openapi.options.Configurable
 import com.intellij.ui.components.labels.LinkLabel
 import com.intellij.util.ui.JBUI
 import io.doloc.intellij.service.DolocSettingsService
+import io.doloc.intellij.util.utmUrl
 import java.awt.BorderLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
@@ -54,7 +55,7 @@ class DolocConfigurable : Configurable {
         val settingsState = DolocSettingsState.getInstance()
         val (xliff12Panel, xliff12Checkboxes, xliff12Radios) = createXliffSettingsSection(
             "XLIFF 1.2",
-            "https://doloc.io/getting-started/formats/xliff-1-2/",
+            utmUrl("https://doloc.io/getting-started/formats/xliff-1-2/", "settings_xliff12"),
             getXliff12UntranslatedStates(),
             getXliff12NewStateOptions(),
             settingsState.xliff12UntranslatedStates,
@@ -72,7 +73,7 @@ class DolocConfigurable : Configurable {
         // 4. XLIFF 2.0 Settings Section
         val (xliff20Panel, xliff20Checkboxes, xliff20Radios) = createXliffSettingsSection(
             "XLIFF 2.0",
-            "https://doloc.io/getting-started/formats/xliff-2-0/",
+            utmUrl("https://doloc.io/getting-started/formats/xliff-2-0/", "settings_xliff20"),
             getXliff20UntranslatedStates(),
             getXliff20NewStateOptions(),
             settingsState.xliff20UntranslatedStates,
@@ -150,7 +151,7 @@ class DolocConfigurable : Configurable {
         gbc.gridy++
         val linkLabel = LinkLabel<Any?>("Get your token on doloc.io/account", null).apply {
             setListener({ _, _ ->
-                BrowserUtil.browse("https://doloc.io/account")
+                BrowserUtil.browse(utmUrl("https://doloc.io/account", "settings_get_token"))
             }, null)
         }
         panel.add(linkLabel, gbc)
