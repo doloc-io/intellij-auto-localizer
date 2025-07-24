@@ -8,7 +8,7 @@
     <name>Auto Localizer</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-    <vendor url="https://doloc.io">Doloc</vendor>
+    <vendor url="https://doloc.io?utm_source=intellij&amp;utm_medium=plugin&amp;utm_campaign=auto_localizer&amp;utm_content=plugin_vendor">Doloc</vendor>
 
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
@@ -23,13 +23,13 @@ High quality localization with one click!</p>
   <li>Supports XLIFF 1.2 and XLIFF 2.0 formats</li>
   <li>Configurable for different translation states (e.g., initial, new, ...)</li>
   <li>Notification for untranslated segments on saving XLIFF files</li>
-  <li>Powered by <a href="https://doloc.io">doloc.io</a>, a translation service that uses AI to provide high-quality translations</li>
+  <li>Powered by <a href="https://doloc.io?utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=plugin_description_powered">doloc.io</a>, a translation service that uses AI to provide high-quality translations</li>
   <li>Free for translation files with up to 100 texts</li>
 </ul>
 </p>
 <h3>Getting started:</h3>
 <p>
-1. Create a (free) account on <a href="https://doloc.io">doloc.io</a> (required to get an API key to use the plugin, we are working on anonymous usage without an account).
+1. Create a (free) account on <a href="https://doloc.io?utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=plugin_description_signup">doloc.io</a> (required to get an API key to use the plugin, we are working on anonymous usage without an account).
 2. To configure, open <b>File | Settings | Tools | Auto Localizer</b>.
 </p>
   ]]></description>
