@@ -103,7 +103,7 @@ Configuration is *IDE-level* (affects every project).
   > “Your free translation quota is used up. Create a free doloc account to continue.”
   > Buttons: **Create account** / Cancel
 * **Create account** opens the default browser at
-  `https://doloc.io/account?upgradeToken=<token>`
+  `https://doloc.io/account?upgradeToken=<token>&utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=quota_dialog`
   (backend upgrades the exact same token; no copy-paste needed).
 
 ### 5.3 Opt-in to personal/prod token
