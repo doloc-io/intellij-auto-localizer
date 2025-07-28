@@ -1,6 +1,5 @@
 package io.doloc.intellij.auth
 
-import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.Logger
 import io.doloc.intellij.http.HttpClientProvider
 import io.doloc.intellij.service.DolocSettingsService
@@ -13,7 +12,7 @@ import java.net.http.HttpResponse
 @Serializable
 private data class AnonymousTokenResponse(
     val token: String,
-    val quota: Int
+    val user_id: String
 )
 
 class AnonymousTokenManager(
@@ -45,7 +44,7 @@ class AnonymousTokenManager(
         val client = HttpClientProvider.client
         val response = client.send(request, HttpResponse.BodyHandlers.ofString())
 
-        if (response.statusCode() != 200) {
+        if (response.statusCode() >= 300) {
             throw IllegalStateException("Failed to get anonymous token: HTTP ${response.statusCode()}")
         }
 
@@ -54,7 +53,7 @@ class AnonymousTokenManager(
         // Save the new token
         settingsService.setAnonymousToken(tokenResponse.token)
 
-        log.info("Created anonymous token with quota: ${tokenResponse.quota}")
+        log.info("Created anonymous token: $tokenResponse")
         return tokenResponse.token
     }
 }

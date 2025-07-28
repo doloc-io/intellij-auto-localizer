@@ -20,7 +20,7 @@ class DolocSettingsService {
     private val logger = Logger.getInstance(DolocSettingsService::class.java)
     // Keep the legacy key so existing users don't have to re-enter their token
     private val manualTokenKey = "io.doloc.intellij.apiToken"
-    private val anonymousTokenKey = "io.doloc.intellij.anonymousToken"
+    private val anonymousTokenKey = "io.doloc.intellij.anonymousApiToken"
     private val _tokenFlow = MutableStateFlow<String?>(null) // manual token flow
 
     // Lazy-initialized token manager
