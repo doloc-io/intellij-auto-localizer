@@ -2,6 +2,7 @@
 <idea-plugin>
     <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
     <id>io.doloc.auto-localizer</id>
+    <version>1.1.0</version>
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
@@ -24,15 +25,34 @@ High quality localization with one click!</p>
   <li>Configurable for different translation states (e.g., initial, new, ...)</li>
   <li>Notification for untranslated segments on saving XLIFF files</li>
   <li>Powered by <a href="https://doloc.io?utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=plugin_description_powered">doloc.io</a>, a translation service that uses AI to provide high-quality translations</li>
-  <li>Free for translation files with up to 100 texts</li>
+  <li>Free and without registration for translation files with up to 100 texts</li>
 </ul>
 </p>
 <h3>Getting started:</h3>
 <p>
-1. Create a (free) account on <a href="https://doloc.io?utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=plugin_description_signup">doloc.io</a> (required to get an API key to use the plugin, we are working on anonymous usage without an account).
-2. To configure, open <b>File | Settings | Tools | Auto Localizer</b>.
+<ol>
+    <li>Right-click on an XLIFF file in the Project View or Editor</li>
+    <li>Select "Translate with Auto Localizer" from the context menu</li>
+    <li>The plugin will automatically translate the segments in the file using the doloc service</li>
+    <li>To configure, open <b>File | Settings | Tools | Auto Localizer</b></li>
+</ol>
+
+Optionally:
+<ul>
+  <li>Create a (free) account on <a href="https://doloc.io?utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=plugin_description_signup">doloc.io</a></li>
+  <li>Enter your API key in the settings (apply for a paid plan for larger text quota)</li>
+  <li>Configure the translation state for which the plugin should translate segments</li>
+  <li>Enable/disable the notification for untranslated segments on saving XLIFF files</li>
+</ul>
 </p>
   ]]></description>
+    <change-notes><![CDATA[
+<h2>New Features</h2>
+<ul>
+  <li>Anonymous token support (up to 100 texts without registration)</li>
+  <li>Improved documentation</li>
+</ul>
+    ]]></change-notes>
 
     <!-- Product and plugin compatibility requirements.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
