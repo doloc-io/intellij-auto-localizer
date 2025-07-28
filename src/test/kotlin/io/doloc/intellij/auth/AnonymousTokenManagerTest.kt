@@ -57,7 +57,7 @@ class AnonymousTokenManagerTest {
         whenever(mockSettingsService.getStoredAnonymousToken()).thenReturn(null)
 
         // Mock the server response
-        val responseBody = """{"token":"new-anonymous-token","quota":1000}"""
+        val responseBody = """{"token":"new-anonymous-token","user_id":"1234-1234-1234-1234"}"""
         mockWebServer.enqueue(
             MockResponse()
                 .setResponseCode(200)
