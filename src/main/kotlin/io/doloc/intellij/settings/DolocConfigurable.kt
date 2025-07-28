@@ -7,6 +7,7 @@ import com.intellij.util.ui.JBUI
 import io.doloc.intellij.service.DolocSettingsService
 import io.doloc.intellij.util.utmUrl
 import java.awt.BorderLayout
+import java.awt.FlowLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.GridLayout
@@ -132,7 +133,7 @@ class DolocConfigurable : Configurable {
         gbc.gridy++
         gbc.insets = JBUI.insets(5, 20, 0, 0) // Indentation
 
-        val radioPanel = JPanel()
+        val radioPanel = JPanel(FlowLayout(FlowLayout.LEFT))
         anonymousRadio = JRadioButton("Anonymous Token")
         manualRadio = JRadioButton("Manual Token")
         val group = ButtonGroup()
@@ -144,6 +145,7 @@ class DolocConfigurable : Configurable {
 
         gbc.gridy++
         val tokenPanel = JPanel(BorderLayout())
+        tokenPanel.add(JLabel("Manual Token:"), BorderLayout.WEST)
         tokenFieldComponent = JPasswordField().apply {
             columns = 30
             settingsService.getStoredManualToken()?.let { text = it }
