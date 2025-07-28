@@ -29,7 +29,7 @@ class AnonymousTokenManager(
      */
     suspend fun getOrCreateToken(): String {
         // First check if we already have a token
-        val existingToken = settingsService.getStoredToken()
+        val existingToken = settingsService.getStoredAnonymousToken()
         if (!existingToken.isNullOrBlank()) {
             return existingToken
         }
@@ -38,9 +38,8 @@ class AnonymousTokenManager(
 
         // Create a new anonymous token
         val request = HttpRequest.newBuilder()
-            .uri(URI("$baseUrl/tokens/anonymous"))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.noBody())
+            .uri(URI("$baseUrl/token/anonymous"))
+            .PUT(HttpRequest.BodyPublishers.noBody())
             .build()
 
         val client = HttpClientProvider.client
@@ -53,7 +52,7 @@ class AnonymousTokenManager(
         val tokenResponse = json.decodeFromString<AnonymousTokenResponse>(response.body())
 
         // Save the new token
-        settingsService.setApiToken(tokenResponse.token)
+        settingsService.setAnonymousToken(tokenResponse.token)
 
         log.info("Created anonymous token with quota: ${tokenResponse.quota}")
         return tokenResponse.token

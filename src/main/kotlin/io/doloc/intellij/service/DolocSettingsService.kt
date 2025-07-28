@@ -8,6 +8,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.Service.Level
 import com.intellij.openapi.diagnostic.Logger
 import io.doloc.intellij.auth.AnonymousTokenManager
+import io.doloc.intellij.settings.DolocSettingsState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,8 +18,10 @@ import kotlinx.coroutines.runBlocking
 class DolocSettingsService {
 
     private val logger = Logger.getInstance(DolocSettingsService::class.java)
-    private val tokenCredentialKey = "io.doloc.intellij.apiToken"
-    private val _tokenFlow = MutableStateFlow<String?>(null)
+    // Keep the legacy key so existing users don't have to re-enter their token
+    private val manualTokenKey = "io.doloc.intellij.apiToken"
+    private val anonymousTokenKey = "io.doloc.intellij.anonymousToken"
+    private val _tokenFlow = MutableStateFlow<String?>(null) // manual token flow
 
     // Lazy-initialized token manager
     private val anonymousTokenManager by lazy { AnonymousTokenManager(this) }
@@ -27,41 +30,52 @@ class DolocSettingsService {
         get() = _tokenFlow.asStateFlow()
 
     init {
-        _tokenFlow.value = getStoredToken()
+        _tokenFlow.value = getStoredManualToken()
     }
 
     /**
-     * Returns the stored API token or attempts to create an anonymous one if not set
+     * Returns the API token according to user preference. If manual token is selected
+     * this will return the stored manual token. Otherwise the anonymous token is returned
+     * and created lazily on first request.
      */
     fun getApiToken(): String? {
-        val storedToken = getStoredToken()
-        if (!storedToken.isNullOrBlank()) {
-            return storedToken
+        val state = DolocSettingsState.getInstance()
+        return if (state.useAnonymousToken) {
+            getOrCreateAnonymousToken()
+        } else {
+            getStoredManualToken()
         }
-        return null;
+    }
 
-//        // If no token found, try to get an anonymous one
-//        return runBlocking {
-//            try {
-//                anonymousTokenManager.getOrCreateToken()
-//            } catch (e: Exception) {
-//                // Log and return null on failure
-//                logger.warn("Failed to get anonymous token", e)
-//                null
-//            }
-//        }
+    private fun getOrCreateAnonymousToken(): String? {
+        val stored = getStoredAnonymousToken()
+        if (!stored.isNullOrBlank()) return stored
+
+        return runBlocking {
+            try {
+                anonymousTokenManager.getOrCreateToken()
+            } catch (e: Exception) {
+                logger.warn("Failed to get anonymous token", e)
+                null
+            }
+        }
     }
 
     /**
      * Returns the stored token without attempting to create an anonymous one
      */
-    fun getStoredToken(): String? {
-        val credentials = PasswordSafe.instance.get(createCredentialAttributes())
+    fun getStoredManualToken(): String? {
+        val credentials = PasswordSafe.instance.get(createCredentialAttributes(manualTokenKey))
+        return credentials?.getPasswordAsString()
+    }
+
+    fun getStoredAnonymousToken(): String? {
+        val credentials = PasswordSafe.instance.get(createCredentialAttributes(anonymousTokenKey))
         return credentials?.getPasswordAsString()
     }
 
     /**
-     * Stores the API token in the Password Safe and updates the token flow
+     * Stores the manual API token in the Password Safe and updates the token flow
      */
     fun setApiToken(token: String?) {
         if (token == null) {
@@ -69,21 +83,34 @@ class DolocSettingsService {
             return
         }
 
-        val credentials = Credentials(tokenCredentialKey, token)
-        PasswordSafe.instance.set(createCredentialAttributes(), credentials)
+        val credentials = Credentials(manualTokenKey, token)
+        PasswordSafe.instance.set(createCredentialAttributes(manualTokenKey), credentials)
         _tokenFlow.value = token
     }
 
+    fun setAnonymousToken(token: String?) {
+        if (token == null) {
+            clearAnonymousToken()
+            return
+        }
+        val credentials = Credentials(anonymousTokenKey, token)
+        PasswordSafe.instance.set(createCredentialAttributes(anonymousTokenKey), credentials)
+    }
+
     /**
-     * Clears the stored API token
+     * Clears the stored manual API token
      */
     fun clearApiToken() {
-        PasswordSafe.instance.set(createCredentialAttributes(), null)
+        PasswordSafe.instance.set(createCredentialAttributes(manualTokenKey), null)
         _tokenFlow.value = null
     }
 
-    private fun createCredentialAttributes(): CredentialAttributes {
-        return CredentialAttributes(tokenCredentialKey) // TODO constructor deprecated
+    fun clearAnonymousToken() {
+        PasswordSafe.instance.set(createCredentialAttributes(anonymousTokenKey), null)
+    }
+
+    private fun createCredentialAttributes(key: String): CredentialAttributes {
+        return CredentialAttributes(key) // TODO constructor deprecated
     }
 
     companion object {

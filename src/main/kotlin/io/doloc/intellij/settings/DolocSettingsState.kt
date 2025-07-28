@@ -39,6 +39,7 @@ class DolocSettingsState : PersistentStateComponent<DolocSettingsState> {
 
     // Common settings
     var showReminderToast: Boolean = true
+    var useAnonymousToken: Boolean = true
 
     override fun getState(): DolocSettingsState = this
 

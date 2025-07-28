@@ -18,6 +18,8 @@ import javax.swing.*
 class DolocConfigurable : Configurable {
     private val settingsService = DolocSettingsService.getInstance()
     private lateinit var tokenFieldComponent: JPasswordField
+    private lateinit var anonymousRadio: JRadioButton
+    private lateinit var manualRadio: JRadioButton
     private lateinit var xliff12UntranslatedCheckboxes: Map<String, JCheckBox>
     private lateinit var xliff12NewStateRadioButtons: Map<String, JRadioButton>
     private lateinit var xliff20UntranslatedCheckboxes: Map<String, JCheckBox>
@@ -130,22 +132,40 @@ class DolocConfigurable : Configurable {
         gbc.gridy++
         gbc.insets = JBUI.insets(5, 20, 0, 0) // Indentation
 
-        // Token field panel
+        val radioPanel = JPanel()
+        anonymousRadio = JRadioButton("Anonymous Token")
+        manualRadio = JRadioButton("Manual Token")
+        val group = ButtonGroup()
+        group.add(anonymousRadio)
+        group.add(manualRadio)
+        radioPanel.add(anonymousRadio)
+        radioPanel.add(manualRadio)
+        panel.add(radioPanel, gbc)
+
+        gbc.gridy++
         val tokenPanel = JPanel(BorderLayout())
         tokenFieldComponent = JPasswordField().apply {
             columns = 30
-            settingsService.getStoredToken()?.let { text = it }
+            settingsService.getStoredManualToken()?.let { text = it }
         }
         tokenPanel.add(tokenFieldComponent, BorderLayout.CENTER)
 
-        // Remove token button
         val removeButton = JButton("Remove").apply {
-            addActionListener {
-                tokenFieldComponent.text = ""
-            }
+            addActionListener { tokenFieldComponent.text = "" }
         }
         tokenPanel.add(removeButton, BorderLayout.EAST)
         panel.add(tokenPanel, gbc)
+
+        val state = DolocSettingsState.getInstance()
+        if (state.useAnonymousToken) {
+            anonymousRadio.isSelected = true
+            tokenFieldComponent.isEnabled = false
+        } else {
+            manualRadio.isSelected = true
+        }
+
+        anonymousRadio.addActionListener { tokenFieldComponent.isEnabled = false }
+        manualRadio.addActionListener { tokenFieldComponent.isEnabled = true }
 
         // Add hyperlink
         gbc.gridy++
@@ -155,6 +175,14 @@ class DolocConfigurable : Configurable {
             }, null)
         }
         panel.add(linkLabel, gbc)
+
+        gbc.gridy++
+        val infoLabel = LinkLabel<Any?>("Anonymous token allows up to 100 source texts", null).apply {
+            setListener({ _, _ ->
+                BrowserUtil.browse(utmUrl("https://doloc.io/pricing/#source-texts", "settings_anonymous_quota"))
+            }, null)
+        }
+        panel.add(infoLabel, gbc)
 
         // (Optional) Add free-tier status if applicable
 
@@ -313,7 +341,8 @@ class DolocConfigurable : Configurable {
 
         // Check if token changed
         val currentToken = String(tokenFieldComponent.password)
-        val storedToken = settingsService.getStoredToken() ?: ""
+        val storedToken = settingsService.getStoredManualToken() ?: ""
+        val currentModeAnonymous = anonymousRadio.isSelected
 
         // Check if XLIFF 1.2 untranslated states changed
         val selectedXliff12Untranslated = xliff12UntranslatedCheckboxes
@@ -339,7 +368,8 @@ class DolocConfigurable : Configurable {
                selectedXliff20Untranslated != settingsState.xliff20UntranslatedStates ||
                selectedXliff12NewState != settingsState.xliff12NewState ||
                selectedXliff20NewState != settingsState.xliff20NewState ||
-               showReminderCheckbox.isSelected != settingsState.showReminderToast
+               showReminderCheckbox.isSelected != settingsState.showReminderToast ||
+               currentModeAnonymous != settingsState.useAnonymousToken
     }
 
     override fun apply() {
@@ -352,6 +382,7 @@ class DolocConfigurable : Configurable {
         } else {
             settingsService.clearApiToken()
         }
+        settingsState.useAnonymousToken = anonymousRadio.isSelected
 
         // Save XLIFF 1.2 untranslated states
         settingsState.xliff12UntranslatedStates = xliff12UntranslatedCheckboxes
@@ -382,7 +413,10 @@ class DolocConfigurable : Configurable {
         val settingsState = DolocSettingsState.getInstance()
 
         // Reset token
-        tokenFieldComponent.text = settingsService.getStoredToken() ?: ""
+        tokenFieldComponent.text = settingsService.getStoredManualToken() ?: ""
+        anonymousRadio.isSelected = settingsState.useAnonymousToken
+        manualRadio.isSelected = !settingsState.useAnonymousToken
+        tokenFieldComponent.isEnabled = !settingsState.useAnonymousToken
 
         // Reset XLIFF 1.2 untranslated states
         xliff12UntranslatedCheckboxes.forEach { (value, checkbox) ->

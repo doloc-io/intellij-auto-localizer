@@ -41,20 +41,20 @@ class AnonymousTokenManagerTest {
     @Test
     fun `should return existing token if available`() = runBlocking {
         // Setup: mock settings to return an existing token
-        whenever(mockSettingsService.getStoredToken()).thenReturn("existing-token")
+        whenever(mockSettingsService.getStoredAnonymousToken()).thenReturn("existing-token")
 
         // Execute
         val result = tokenManager.getOrCreateToken()
 
         // Verify
         assertEquals("existing-token", result)
-        verify(mockSettingsService, never()).setApiToken("existing-token")
+        verify(mockSettingsService, never()).setAnonymousToken("existing-token")
     }
 
     @Test
     fun `should create and store new anonymous token if none exists`() = runBlocking {
         // Setup: mock settings to return null (no token)
-        whenever(mockSettingsService.getStoredToken()).thenReturn(null)
+        whenever(mockSettingsService.getStoredAnonymousToken()).thenReturn(null)
 
         // Mock the server response
         val responseBody = """{"token":"new-anonymous-token","quota":1000}"""
@@ -70,11 +70,11 @@ class AnonymousTokenManagerTest {
 
         // Verify
         assertEquals("new-anonymous-token", result)
-        verify(mockSettingsService).setApiToken("new-anonymous-token")
+        verify(mockSettingsService).setAnonymousToken("new-anonymous-token")
 
         // Verify the request
         val recordedRequest = mockWebServer.takeRequest()
-        assertEquals("POST", recordedRequest.method)
-        assertEquals("/tokens/anonymous", recordedRequest.path)
+        assertEquals("PUT", recordedRequest.method)
+        assertEquals("/token/anonymous", recordedRequest.path)
     }
 }
