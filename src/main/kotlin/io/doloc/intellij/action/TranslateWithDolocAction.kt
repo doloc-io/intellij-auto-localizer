@@ -163,17 +163,42 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
                                 )
                             }
                     } else if (response.statusCode() == 402) {
-                        showNotification(
-                            project,
-                            "Translation failed: Quota exceeded!",
-                            "Your monthly quota is used. Consider upgrading your account.",
-                            NotificationType.ERROR,
-                            object : AnAction("Visit doloc.io/account") {
-                                override fun actionPerformed(e: AnActionEvent) {
-                                    BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_quota_exceeded"))
+                        val isAnonymousToken = DolocSettingsState.getInstance().useAnonymousToken
+                        if (isAnonymousToken) {
+                            showNotification(
+                                project,
+                                "Translation failed: Quota exceeded!",
+                                "Your monthly free quota of 100 source texts is used. Please register an account on doloc.io with a paid plan for increased quota.",
+                                NotificationType.ERROR,
+                                object : AnAction("Register on doloc.io") {
+                                    override fun actionPerformed(e: AnActionEvent) {
+                                        BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_quota_exceeded"))
+                                    }
+                                },
+                                object : AnAction("Configure API Token in Settings") {
+                                    override fun actionPerformed(e: AnActionEvent) {
+                                        ShowSettingsUtil.getInstance().showSettingsDialog(
+                                            project,
+                                            DolocConfigurable::class.java
+                                        )
+                                    }
                                 }
-                            }
-                        )
+
+                            )
+                        } else {
+                            showNotification(
+                                project,
+                                "Translation failed: Quota exceeded!",
+                                "Your monthly quota is used. Consider upgrading your account.",
+                                NotificationType.ERROR,
+                                object : AnAction("Visit doloc.io/account") {
+                                    override fun actionPerformed(e: AnActionEvent) {
+                                        BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_quota_exceeded"))
+                                    }
+                                }
+                            )
+
+                        }
                     } else {
                         throw IllegalStateException("Translation failed with status: ${response.statusCode()}")
                     }
