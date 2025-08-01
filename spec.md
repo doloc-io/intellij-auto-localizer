@@ -55,7 +55,7 @@ Parse only `<trans-unit>`/`<unit>` headers and quickly stop when encountering:
 
 * empty `<target>`
 * `<target>` identical to `<source>`
-* state attributes ∈ doloc default `untranslated` lists (XLIFF 1.2 default: `new,needs-translation,needs-l10n,needs-adaption,no-state_target-equals-source,no-state_empty-target`; XLIFF 2.0 default analogous).
+* state attributes ∈ doloc default `untranslated` lists (XLIFF 1.2 default: `new,needs-translation,needs-l10n,needs-adaptation,no-state_target-equals-source,no-state_empty-target`; XLIFF 2.0 default analogous).
   The scan is **synchronous** and must finish in < 50 ms for typical files.
 
 ### 3.3 Context-menu scope

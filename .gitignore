@@ -28,3 +28,6 @@ replay_pid*
 
 .intellijPlatform
 *.iml
+.idea/
+.gradle/
+build/
