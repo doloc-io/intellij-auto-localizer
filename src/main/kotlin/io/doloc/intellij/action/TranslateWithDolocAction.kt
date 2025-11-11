@@ -24,8 +24,10 @@ import io.doloc.intellij.http.HttpClientProvider
 import io.doloc.intellij.service.DolocSettingsService
 import io.doloc.intellij.settings.DolocSettingsState
 import io.doloc.intellij.xliff.LightweightXliffScanner
+import io.doloc.intellij.xliff.TargetLanguageAttributeHelper
 import io.doloc.intellij.settings.DolocConfigurable
 import io.doloc.intellij.util.utmUrl
+
 import java.net.http.HttpResponse
 
 class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
@@ -105,37 +107,55 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
             }
         }
 
+        val settings = DolocSettingsState.getInstance()
+        val scanResult = try {
+            LightweightXliffScanner().scan(
+                file,
+                settings.xliff12UntranslatedStates,
+                settings.xliff20UntranslatedStates
+            )
+        } catch (exception: Exception) {
+            log.warn("Failed to scan XLIFF file", exception)
+            showNotification(
+                project,
+                "Translation failed",
+                exception.message ?: "Could not inspect ${file.name}",
+                NotificationType.ERROR
+            )
+            return
+        }
+
+        if (!scanResult.hasTargetLanguageAttribute) {
+            handleMissingTargetLanguage(project, file, scanResult.isXliff2)
+            return
+        }
+
+        val untranslatedStates = if (scanResult.isXliff2) {
+            settings.xliff20UntranslatedStates
+        } else {
+            settings.xliff12UntranslatedStates
+        }
+
+        val newState = if (scanResult.isXliff2) {
+            settings.xliff20NewState
+        } else {
+            settings.xliff12NewState
+        }
+
         // Start the translation as a background task
         object : Task.Backgroundable(project, "Translating ${file.name}", true) {
+
             @Suppress("DialogTitleCapitalization")
             override fun run(indicator: ProgressIndicator) {
                 indicator.isIndeterminate = true
 
                 try {
-                    val settings = DolocSettingsState.getInstance()
-                    val scanResult = LightweightXliffScanner().scan(
-                        file,
-                        settings.xliff12UntranslatedStates,
-                        settings.xliff20UntranslatedStates
-                    )
-
-                    val untranslatedStates = if (scanResult.isXliff2) {
-                        settings.xliff20UntranslatedStates
-                    } else {
-                        settings.xliff12UntranslatedStates
-                    }
-
-                    val newState = if (scanResult.isXliff2) {
-                        settings.xliff20NewState
-                    } else {
-                        settings.xliff12NewState
-                    }
-
                     val request = DolocRequestBuilder.createTranslationRequest(
                         file,
                         untranslatedStates = untranslatedStates,
                         newState = newState
                     )
+
 
                     // Send request
                     val response = HttpClientProvider.client.send(
@@ -163,7 +183,8 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
                                 )
                             }
                     } else if (response.statusCode() == 402) {
-                        val isAnonymousToken = DolocSettingsState.getInstance().useAnonymousToken
+                        val isAnonymousToken = settings.useAnonymousToken
+
                         if (isAnonymousToken) {
                             showNotification(
                                 project,
@@ -231,6 +252,31 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         }.queue()
     }
 
+    private fun handleMissingTargetLanguage(
+        project: Project,
+        file: VirtualFile,
+        isXliff2: Boolean
+    ) {
+        val attributeName = if (isXliff2) "trgLang" else "target-language"
+        val elementName = if (isXliff2) "&lt;xliff&gt;" else "&lt;file&gt;"
+        val message = buildString {
+            append("The $elementName element in ${file.name} is missing the \"$attributeName\" attribute required for translation.")
+            append('\n')
+            append("\"Add Attribute\" will attempt to to guess the target langauge from the file name and insert the corret attribute. Afterwards, you can review and edit the inserted value if needed.")
+        }
+        val result = Messages.showYesNoDialog(
+            project,
+            message,
+            "doloc Translation: Target Language Missing",
+            "Add Attribute",
+            "Cancel",
+            Messages.getWarningIcon()
+        )
+        if (result == Messages.YES) {
+            TargetLanguageAttributeHelper.addMissingTargetLanguageAttribute(project, file, isXliff2)
+        }
+    }
+
     private fun showNotification(
         project: Project,
         title: String,
@@ -243,3 +289,4 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         notification.notify(project)
     }
 }
+

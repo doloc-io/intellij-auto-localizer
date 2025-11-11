@@ -11,8 +11,10 @@ import javax.xml.parsers.SAXParserFactory
 class LightweightXliffScanner {
     data class ScanResult(
         val hasUntranslatedUnits: Boolean,
-        val isXliff2: Boolean
+        val isXliff2: Boolean,
+        val hasTargetLanguageAttribute: Boolean
     )
+
 
     /**
      * Scans an XLIFF file to detect untranslated units and determine version
@@ -29,7 +31,12 @@ class LightweightXliffScanner {
         factory.isNamespaceAware = true
         val parser = factory.newSAXParser()
         parser.parse(file.contentsToByteArray().inputStream(), handler)
-        return ScanResult(handler.hasUntranslatedUnits, handler.isXliff2Detected)
+        return ScanResult(
+            handler.hasUntranslatedUnits,
+            handler.isXliff2Detected,
+            handler.hasTargetLanguageAttribute
+        )
+
     }
 
     private class XliffHandler(
@@ -37,11 +44,14 @@ class LightweightXliffScanner {
         private var xliff20UntranslatedStates: Set<String>
     ) : DefaultHandler() {
         var hasUntranslatedUnits = false
+        var hasTargetLanguageAttribute = true
+        private var targetLanguageAttributeChecked = false
         private var inSource = false
         private var inTarget = false
         private var currentSourceValue = ""
         private var currentTargetValue = ""
         var isXliff2Detected = false
+
 
         // Determine which untranslated states to use based on XLIFF version
         private val untranslatedStates: Set<String>
@@ -61,9 +71,22 @@ class LightweightXliffScanner {
             if (qName == "xliff") {
                 val version = attributes.getValue("version")
                 isXliff2Detected = version?.startsWith("2.") == true
+
+                if (isXliff2Detected) {
+                    targetLanguageAttributeChecked = true
+                    val trgLang = attributes.getValue("trgLang")
+                    hasTargetLanguageAttribute = !trgLang.isNullOrBlank()
+                }
+            }
+
+            if (!isXliff2Detected && qName == "file" && !targetLanguageAttributeChecked) {
+                targetLanguageAttributeChecked = true
+                val targetLanguage = attributes.getValue("target-language")
+                hasTargetLanguageAttribute = !targetLanguage.isNullOrBlank()
             }
 
             when (qName) {
+
                 "source" -> {
                     inSource = true
                     currentSourceValue = ""

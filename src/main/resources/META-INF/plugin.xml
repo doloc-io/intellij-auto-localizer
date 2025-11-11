@@ -2,7 +2,7 @@
 <idea-plugin>
     <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
     <id>io.doloc.auto-localizer</id>
-    <version>1.1.1</version>
+    <version>1.2.0</version>
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
@@ -50,6 +50,7 @@ Optionally:
 <h2>New Features</h2>
 <ul>
   <li>Improved error handling, including display of specific and actionable error notifications</li>
+  <li>Detect missing target language and provide action to automatically add correct xliff attribute</li>
 </ul>
     ]]></change-notes>
 

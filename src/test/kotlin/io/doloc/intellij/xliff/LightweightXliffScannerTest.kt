@@ -30,7 +30,9 @@ class LightweightXliffScannerTest {
         )
         assertTrue(result.hasUntranslatedUnits)
         assertFalse(result.isXliff2)
+        assertTrue(result.hasTargetLanguageAttribute)
     }
+
     
     @Test
     fun `should detect units that need translation by state`() {
@@ -50,7 +52,9 @@ class LightweightXliffScannerTest {
         val result = scanner.scan(mockVirtualFile, setOf("new"), setOf("new"))
         assertTrue(result.hasUntranslatedUnits)
         assertFalse(result.isXliff2)
+        assertTrue(result.hasTargetLanguageAttribute)
     }
+
 
     @Test
     fun `should not flag fully translated files`() {
@@ -94,7 +98,9 @@ class LightweightXliffScannerTest {
         )
         assertFalse(result.hasUntranslatedUnits)
         assertFalse(result.isXliff2)
+        assertTrue(result.hasTargetLanguageAttribute)
     }
+
 
     @Test
     fun `should detect untranslated units in XLIFF 2_0`() {
@@ -142,5 +148,49 @@ class LightweightXliffScannerTest {
         )
         assertTrue(result2.hasUntranslatedUnits)
         assertTrue(result2.isXliff2)
+        assertTrue(result2.hasTargetLanguageAttribute)
+    }
+
+    @Test
+    fun `should detect missing target language in XLIFF 1_2`() {
+        val mockVirtualFile = MockVirtualFile(
+            "missing-target.xlf",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2">
+  <file source-language="en">
+    <body>
+      <trans-unit id="1">
+        <source>Hello</source>
+        <target>Bonjour</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>"""
+        )
+        val result = scanner.scan(mockVirtualFile, emptySet(), emptySet())
+        assertFalse(result.hasTargetLanguageAttribute)
+        assertFalse(result.isXliff2)
+    }
+
+    @Test
+    fun `should detect missing target language in XLIFF 2_0`() {
+        val mockVirtualFile = MockVirtualFile(
+            "missing-target-2.xlf",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="2.0" srcLang="en">
+  <file id="f1">
+    <unit id="u1">
+      <segment>
+        <source>Hello</source>
+        <target>Bonjour</target>
+      </segment>
+    </unit>
+  </file>
+</xliff>"""
+        )
+        val result = scanner.scan(mockVirtualFile, emptySet(), emptySet())
+        assertFalse(result.hasTargetLanguageAttribute)
+        assertTrue(result.isXliff2)
     }
 }
+
