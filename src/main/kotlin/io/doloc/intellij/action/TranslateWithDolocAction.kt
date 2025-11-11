@@ -200,7 +200,21 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
 
                         }
                     } else {
-                        throw IllegalStateException("Translation failed with status: ${response.statusCode()}")
+                        val responseBody = try {
+                            String(response.body()).trim()
+                        } catch (ignored: Exception) {
+                            ""
+                        }
+
+                        val message = buildString {
+                            append("Translation failed with status: ${response.statusCode()}")
+                            if (responseBody.isNotEmpty()) {
+                                append('\n')
+                                append(responseBody)
+                            }
+                        }
+
+                        throw IllegalStateException(message)
                     }
                 } catch (e: ProcessCanceledException) {
                     throw e

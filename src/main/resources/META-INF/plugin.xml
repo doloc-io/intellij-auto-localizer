@@ -2,7 +2,7 @@
 <idea-plugin>
     <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
     <id>io.doloc.auto-localizer</id>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
@@ -49,8 +49,7 @@ Optionally:
     <change-notes><![CDATA[
 <h2>New Features</h2>
 <ul>
-  <li>Anonymous token support (up to 100 texts without registration)</li>
-  <li>Improved documentation</li>
+  <li>Improved error handling, including display of specific and actionable error notifications</li>
 </ul>
     ]]></change-notes>
 
