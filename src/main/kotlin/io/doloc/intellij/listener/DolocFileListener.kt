@@ -104,6 +104,13 @@ class DolocFileListener : BulkFileListener {
             }
         })
 
+        notification.addAction(object : AnAction("Never show this again") {
+            override fun actionPerformed(e: AnActionEvent) {
+                DolocSettingsState.getInstance().showReminderToast = false
+                notification.expire()
+            }
+        })
+
         notification.notify(project)
     }
 }
