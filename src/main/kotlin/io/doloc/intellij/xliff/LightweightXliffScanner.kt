@@ -41,6 +41,7 @@ class LightweightXliffScanner {
         private var inTarget = false
         private var currentSourceValue = ""
         private var currentTargetValue = ""
+        private var currentState = null as String?
         var isXliff2Detected = false
 
         // Determine which untranslated states to use based on XLIFF version
@@ -73,21 +74,28 @@ class LightweightXliffScanner {
                     currentTargetValue = ""
 
                     // Check state attribute (XLIFF 1.2 style)
-                    val state = attributes.getValue("state")
-                    if (state != null && state in xliff12UntranslatedStates) {
-                        hasUntranslatedUnits = true
-                        return
+                    if (!isXliff2Detected) {
+                        currentState = attributes.getValue("state")
+                        if (currentState != null && currentState in xliff12UntranslatedStates) {
+                            hasUntranslatedUnits = true
+                            return
+                        }
                     }
+
                 }
-                "trans-unit", "unit", "segment" -> {
+                "trans-unit", "unit" -> {
                     // Reset for new unit
                     currentSourceValue = ""
                     currentTargetValue = ""
-
+                }
+                 "segment" -> {
+                    // Reset for new unit
+                    currentSourceValue = ""
+                    currentTargetValue = ""
                     // Check state attribute (XLIFF 2.0 style)
                     if (isXliff2Detected) {
-                        val state = attributes.getValue("state")
-                        if (state != null && state in xliff20UntranslatedStates) {
+                        currentState = attributes.getValue("state")
+                        if (currentState != null && currentState in xliff20UntranslatedStates) {
                             hasUntranslatedUnits = true
                             return
                         }
@@ -112,6 +120,9 @@ class LightweightXliffScanner {
                     inTarget = false
 
                     // Check if target is empty or equals source, using the correct keys for each version
+                    if (currentState != null) {
+                        return
+                    }
                     if (currentTargetValue.isBlank() && "no-state_empty-target" in untranslatedStates) {
                         hasUntranslatedUnits = true
                     } else if (currentTargetValue.trim() == currentSourceValue.trim() &&

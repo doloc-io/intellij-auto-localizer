@@ -2,7 +2,7 @@
 <idea-plugin>
     <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
     <id>io.doloc.auto-localizer</id>
-    <version>1.2.0</version>
+    <version>1.2.1</version>
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
@@ -47,10 +47,9 @@ Optionally:
 </p>
   ]]></description>
     <change-notes><![CDATA[
-<h2>New Features</h2>
+<h2>Bug Fixes</h2>
 <ul>
-  <li>Improved error handling, including display of specific and actionable error notifications</li>
-  <li>Added a "Never show this again" action to untranslated strings notifications</li>
+  <li>Do not incorrectly notify about untranslated strings for empty targets with correct state</li>
 </ul>
     ]]></change-notes>
 

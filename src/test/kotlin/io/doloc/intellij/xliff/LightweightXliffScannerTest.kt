@@ -143,4 +143,47 @@ class LightweightXliffScannerTest {
         assertTrue(result2.hasUntranslatedUnits)
         assertTrue(result2.isXliff2)
     }
+
+    @Test
+    fun `should not flag fully translated XLIFF 2_0`() {
+        val mockVirtualFile = MockVirtualFile("untranslated.xlf",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="2.0" srcLang="en" trgLang="it">
+  <file id="f1">
+    <unit id="u1">
+      <segment state="translated">
+        <source>Open</source>
+        <target></target>
+      </segment>
+    </unit>
+    <unit id="u2">
+      <segment state="final">
+        <source>Close</source>
+        <target>Close</target>
+      </segment>
+    </unit>
+  </file>
+</xliff>
+"""
+        )
+        val result2 = scanner.scan(
+            mockVirtualFile,
+            setOf(
+                "new",
+                "needs-translation",
+                "needs-l10n",
+                "needs-adaptation",
+                "no-state_target-equals-source",
+                "no-state_empty-target"
+            ),
+            setOf(
+                "initial",
+                "no-state_target-equals-source",
+                "no-state_empty-target"
+            )
+        )
+        assertFalse(result2.hasUntranslatedUnits)
+        assertTrue(result2.isXliff2)
+    }
+
 }
