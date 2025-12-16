@@ -24,8 +24,11 @@ import io.doloc.intellij.http.HttpClientProvider
 import io.doloc.intellij.service.DolocSettingsService
 import io.doloc.intellij.settings.DolocSettingsState
 import io.doloc.intellij.xliff.LightweightXliffScanner
+import io.doloc.intellij.xliff.TargetLanguageAttribute
+import io.doloc.intellij.xliff.TargetLanguageHelper
 import io.doloc.intellij.settings.DolocConfigurable
 import io.doloc.intellij.util.utmUrl
+
 import java.net.http.HttpResponse
 
 class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
@@ -105,33 +108,38 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
             }
         }
 
+        val settings = DolocSettingsState.getInstance()
+        val scanResult = LightweightXliffScanner().scan(
+            file,
+            settings.xliff12UntranslatedStates,
+            settings.xliff20UntranslatedStates
+        )
+
+        val ensuredScanResult = ensureTargetLanguage(project, file, scanResult, settings) ?: return
+        val translationScanResult = ensuredScanResult
+
         // Start the translation as a background task
         object : Task.Backgroundable(project, "Translating ${file.name}", true) {
+
             @Suppress("DialogTitleCapitalization")
             override fun run(indicator: ProgressIndicator) {
                 indicator.isIndeterminate = true
 
                 try {
-                    val settings = DolocSettingsState.getInstance()
-                    val scanResult = LightweightXliffScanner().scan(
-                        file,
-                        settings.xliff12UntranslatedStates,
-                        settings.xliff20UntranslatedStates
-                    )
-
-                    val untranslatedStates = if (scanResult.isXliff2) {
+                    val untranslatedStates = if (translationScanResult.isXliff2) {
                         settings.xliff20UntranslatedStates
                     } else {
                         settings.xliff12UntranslatedStates
                     }
 
-                    val newState = if (scanResult.isXliff2) {
+                    val newState = if (translationScanResult.isXliff2) {
                         settings.xliff20NewState
                     } else {
                         settings.xliff12NewState
                     }
 
                     val request = DolocRequestBuilder.createTranslationRequest(
+
                         file,
                         untranslatedStates = untranslatedStates,
                         newState = newState
@@ -231,6 +239,95 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         }.queue()
     }
 
+    private fun ensureTargetLanguage(
+        project: Project,
+        file: VirtualFile,
+        scanResult: LightweightXliffScanner.ScanResult,
+        settings: DolocSettingsState
+    ): LightweightXliffScanner.ScanResult? {
+        if (!scanResult.targetLanguageValue.isNullOrBlank()) {
+            return scanResult
+        }
+
+        val attribute = scanResult.targetLanguageAttribute
+        val baseMessage = buildString {
+            append("File \"${file.name}\" is missing the required \"")
+            append(attribute.attributeName)
+            append("\" attribute on &lt;")
+            append(attribute.elementName)
+            append("&gt;.\nPlease set the target language before translating.")
+        }
+
+        val filenameLanguage = TargetLanguageHelper.guessLanguageFromFilename(file.name)
+        if (filenameLanguage.isNullOrBlank()) {
+            Messages.showWarningDialog(project, baseMessage, "doloc Translation")
+            return null
+        }
+
+        val dialogMessage = buildString {
+            append(baseMessage)
+            append("\n\nDetected \"")
+            append(filenameLanguage)
+            append("\" from the filename. Add it automatically?")
+        }
+        val applyButtonLabel = "Add ${attribute.attributeName}=\"$filenameLanguage\""
+        val selected = Messages.showDialog(
+            project,
+            dialogMessage,
+            "doloc Translation",
+            arrayOf(applyButtonLabel, "Cancel"),
+            0,
+            Messages.getWarningIcon()
+        )
+        if (selected != 0) {
+            return null
+        }
+
+        if (!applyTargetLanguageQuickFix(file, attribute, filenameLanguage)) {
+            Messages.showErrorDialog(
+                project,
+                "Unable to update the file automatically. Please add ${attribute.attributeName}=\"$filenameLanguage\" manually and retry.",
+                "doloc Translation"
+            )
+            return null
+        }
+
+        val rescanned = LightweightXliffScanner().scan(
+            file,
+            settings.xliff12UntranslatedStates,
+            settings.xliff20UntranslatedStates
+        )
+        if (rescanned.targetLanguageValue.isNullOrBlank()) {
+            Messages.showErrorDialog(
+                project,
+                "The target language attribute is still missing after applying the quick fix. Please update the file manually and retry.",
+                "doloc Translation"
+            )
+            return null
+        }
+
+        return rescanned
+    }
+
+    private fun applyTargetLanguageQuickFix(
+        file: VirtualFile,
+        attribute: TargetLanguageAttribute,
+        language: String
+    ): Boolean {
+        return try {
+            val currentText = VfsUtil.loadText(file)
+            val updatedText = TargetLanguageHelper.addTargetLanguageAttribute(currentText, attribute, language)
+                ?: return false
+            ApplicationManager.getApplication().runWriteAction {
+                VfsUtil.saveText(file, updatedText)
+            }
+            true
+        } catch (e: Exception) {
+            log.warn("Failed to apply target language quick fix", e)
+            false
+        }
+    }
+
     private fun showNotification(
         project: Project,
         title: String,
@@ -243,3 +340,4 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         notification.notify(project)
     }
 }
+

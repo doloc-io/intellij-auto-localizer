@@ -2,8 +2,10 @@ package io.doloc.intellij.xliff
 
 import com.intellij.mock.MockVirtualFile
 import org.junit.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
 
 class LightweightXliffScannerTest {
     private val scanner = LightweightXliffScanner()
@@ -30,10 +32,39 @@ class LightweightXliffScannerTest {
         )
         assertTrue(result.hasUntranslatedUnits)
         assertFalse(result.isXliff2)
+        assertEquals(TargetLanguageAttribute.XLIFF12_FILE, result.targetLanguageAttribute)
+        assertEquals("fr", result.targetLanguageValue)
+    }
+    
+    @Test
+    fun `should report missing target language for XLIFF 1_2`() {
+        val mockVirtualFile = MockVirtualFile(
+            "missing-lang.xlf",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2">
+  <file source-language="en" datatype="plaintext" original="strings">
+    <body>
+      <trans-unit id="1">
+        <source>Hello</source>
+        <target></target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>"""
+        )
+        val result = scanner.scan(
+            mockVirtualFile,
+            setOf("no-state_empty-target"),
+            setOf("no-state_empty-target")
+        )
+        assertFalse(result.isXliff2)
+        assertEquals(TargetLanguageAttribute.XLIFF12_FILE, result.targetLanguageAttribute)
+        assertEquals(null, result.targetLanguageValue)
     }
     
     @Test
     fun `should detect units that need translation by state`() {
+
         val mockVirtualFile = MockVirtualFile("untranslated.xlf",
             """<?xml version="1.0" encoding="UTF-8"?>
 <xliff version="1.2">
@@ -142,10 +173,39 @@ class LightweightXliffScannerTest {
         )
         assertTrue(result2.hasUntranslatedUnits)
         assertTrue(result2.isXliff2)
+        assertEquals(TargetLanguageAttribute.XLIFF20_ROOT, result2.targetLanguageAttribute)
+        assertEquals("it", result2.targetLanguageValue)
     }
-
+ 
+    @Test
+    fun `should report missing target language for XLIFF 2_0`() {
+        val mockVirtualFile = MockVirtualFile(
+            "missing-xliff2-lang.xlf",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="2.0" srcLang="en">
+  <file id="f1">
+    <unit id="u1">
+      <segment>
+        <source>File</source>
+        <target></target>
+      </segment>
+    </unit>
+  </file>
+</xliff>"""
+        )
+        val result = scanner.scan(
+            mockVirtualFile,
+            setOf("no-state_empty-target"),
+            setOf("no-state_empty-target")
+        )
+        assertTrue(result.isXliff2)
+        assertEquals(TargetLanguageAttribute.XLIFF20_ROOT, result.targetLanguageAttribute)
+        assertEquals(null, result.targetLanguageValue)
+    }
+ 
     @Test
     fun `should not flag fully translated XLIFF 2_0`() {
+
         val mockVirtualFile = MockVirtualFile("untranslated.xlf",
             """<?xml version="1.0" encoding="UTF-8"?>
 <xliff version="2.0" srcLang="en" trgLang="it">

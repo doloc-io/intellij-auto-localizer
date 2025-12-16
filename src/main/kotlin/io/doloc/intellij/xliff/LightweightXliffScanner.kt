@@ -11,8 +11,11 @@ import javax.xml.parsers.SAXParserFactory
 class LightweightXliffScanner {
     data class ScanResult(
         val hasUntranslatedUnits: Boolean,
-        val isXliff2: Boolean
+        val isXliff2: Boolean,
+        val targetLanguageAttribute: TargetLanguageAttribute,
+        val targetLanguageValue: String?
     )
+
 
     /**
      * Scans an XLIFF file to detect untranslated units and determine version
@@ -29,8 +32,19 @@ class LightweightXliffScanner {
         factory.isNamespaceAware = true
         val parser = factory.newSAXParser()
         parser.parse(file.contentsToByteArray().inputStream(), handler)
-        return ScanResult(handler.hasUntranslatedUnits, handler.isXliff2Detected)
+        val attribute = if (handler.isXliff2Detected) {
+            TargetLanguageAttribute.XLIFF20_ROOT
+        } else {
+            TargetLanguageAttribute.XLIFF12_FILE
+        }
+        return ScanResult(
+            handler.hasUntranslatedUnits,
+            handler.isXliff2Detected,
+            attribute,
+            handler.targetLanguageValue
+        )
     }
+
 
     private class XliffHandler(
         private val xliff12UntranslatedStates: Set<String>,
@@ -43,6 +57,8 @@ class LightweightXliffScanner {
         private var currentTargetValue = ""
         private var currentState = null as String?
         var isXliff2Detected = false
+        var targetLanguageValue: String? = null
+
 
         // Determine which untranslated states to use based on XLIFF version
         private val untranslatedStates: Set<String>
@@ -58,10 +74,16 @@ class LightweightXliffScanner {
             qName: String,
             attributes: Attributes
         ) {
-            // Check XLIFF version
             if (qName == "xliff") {
                 val version = attributes.getValue("version")
-                isXliff2Detected = version?.startsWith("2.") == true
+                val trgLangAttr = attributes.getValue(TargetLanguageAttribute.XLIFF20_ROOT.attributeName)
+                val detectedXliff2 = version?.startsWith("2.") == true || !trgLangAttr.isNullOrBlank()
+                if (detectedXliff2) {
+                    isXliff2Detected = true
+                }
+                if (!trgLangAttr.isNullOrBlank()) {
+                    targetLanguageValue = trgLangAttr
+                }
             }
 
             when (qName) {
@@ -69,8 +91,17 @@ class LightweightXliffScanner {
                     inSource = true
                     currentSourceValue = ""
                 }
+                "file" -> {
+                    if (!isXliff2Detected && targetLanguageValue.isNullOrBlank()) {
+                        val attrValue = attributes.getValue(TargetLanguageAttribute.XLIFF12_FILE.attributeName)
+                        if (!attrValue.isNullOrBlank()) {
+                            targetLanguageValue = attrValue
+                        }
+                    }
+                }
                 "target" -> {
                     inTarget = true
+
                     currentTargetValue = ""
 
                     // Check state attribute (XLIFF 1.2 style)
