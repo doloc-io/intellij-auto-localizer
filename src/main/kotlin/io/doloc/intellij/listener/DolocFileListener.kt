@@ -167,7 +167,7 @@ class DolocFileListener : BulkFileListener {
 
     private fun resolveProject(file: VirtualFile): Project? {
         return ProjectLocator.getInstance().getProjectsForFile(file)
-            .firstOrNull { !it.isDisposed && it.isInitialized }
+            .firstOrNull { it != null && !it.isDisposed && it.isInitialized }
     }
 
     private fun isSupportedReminderFile(file: VirtualFile): Boolean {

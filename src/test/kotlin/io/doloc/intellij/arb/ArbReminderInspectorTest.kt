@@ -7,7 +7,6 @@ import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 class ArbReminderInspectorTest : BasePlatformTestCase() {
     private val inspector = ArbReminderInspector()
@@ -33,8 +32,7 @@ class ArbReminderInspectorTest : BasePlatformTestCase() {
         val base = createFile(scope.resolve("app_en.arb"), """{"@@locale":"en","hello":"Hello","bye":"Bye"}""")
         val target = createFile(scope.resolve("app_de.arb"), """{"@@locale":"de","hello":"Hallo"}""")
 
-        val reminder = inspector.inspect(project, target, setOf("missing"))
-        assertNotNull(reminder)
+        val reminder = inspector.inspect(project, target, setOf("missing")) ?: error("Expected target reminder")
         assertEquals(ArbReminderInspector.ReminderType.TARGET, reminder.type)
         assertEquals(base.path, reminder.baseFile.path)
     }
@@ -45,8 +43,7 @@ class ArbReminderInspectorTest : BasePlatformTestCase() {
         createFile(scope.resolve("app_de.arb"), """{"@@locale":"de","hello":"Hallo"}""")
         createFile(scope.resolve("app_fr.arb"), """{"@@locale":"fr","hello":"Bonjour"}""")
 
-        val reminder = inspector.inspect(project, base, setOf("missing"))
-        assertNotNull(reminder)
+        val reminder = inspector.inspect(project, base, setOf("missing")) ?: error("Expected base reminder")
         assertEquals(ArbReminderInspector.ReminderType.BASE, reminder.type)
         assertEquals(2, reminder.targetFiles.size)
     }

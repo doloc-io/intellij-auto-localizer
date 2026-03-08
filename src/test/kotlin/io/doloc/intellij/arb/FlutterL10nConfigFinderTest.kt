@@ -5,7 +5,6 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import java.nio.file.Files
 import kotlin.io.path.writeText
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 class FlutterL10nConfigFinderTest : BasePlatformTestCase() {
     private val finder = FlutterL10nConfigFinder()
@@ -25,10 +24,9 @@ class FlutterL10nConfigFinderTest : BasePlatformTestCase() {
 
         val targetFile = LocalFileSystem.getInstance()
             .refreshAndFindFileByIoFile(moduleDir.resolve("lib/l10n/app_de.arb").toFile())
-        assertNotNull(targetFile)
+            ?: error("Expected target ARB file")
 
-        val config = finder.findNearest(targetFile.parent)
-        assertNotNull(config)
+        val config = finder.findNearest(targetFile.parent) ?: error("Expected l10n config")
         assertEquals("lib/l10n", config.arbDirPath)
         assertEquals("app_en.arb", config.templateArbFile)
         assertEquals("app_en.arb", config.arbDir?.findChild(config.templateArbFile)?.name)

@@ -136,6 +136,7 @@ class ArbPairResolver(
         return ArbHeuristics.collectArbFiles(scope.searchRoot)
             .asSequence()
             .filter { it.path != baseFile.path }
+            .filterNot { ArbHeuristics.hasPreferredSourceLocale(it) }
             .filter { candidate ->
                 resolveScopeBase(project, candidate)?.path == baseFile.path ||
                     ArbHeuristics.matchesExplicitBase(baseFile, candidate)

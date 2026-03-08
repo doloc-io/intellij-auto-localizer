@@ -124,6 +124,11 @@ object ArbHeuristics {
         }
     }
 
+    fun hasPreferredSourceLocale(file: VirtualFile): Boolean {
+        val locale = ArbLocaleHelper.guessLocaleFromPath(file) ?: return false
+        return preferredSourceLocales.any { it.equals(locale, ignoreCase = true) }
+    }
+
     fun matchesExplicitBase(baseFile: VirtualFile, candidate: VirtualFile): Boolean {
         if (candidate.path == baseFile.path) {
             return false

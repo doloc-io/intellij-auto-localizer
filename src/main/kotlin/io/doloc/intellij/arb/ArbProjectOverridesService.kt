@@ -110,7 +110,12 @@ class ArbProjectOverridesService(
     fun toStoredPath(path: String): String {
         val normalizedPath = FileUtil.toSystemIndependentName(path)
         val projectBasePath = project.basePath?.let(FileUtil::toSystemIndependentName) ?: return normalizedPath
-        return FileUtil.getRelativePath(projectBasePath, normalizedPath, '/') ?: normalizedPath
+        val isWithinProject = normalizedPath == projectBasePath || normalizedPath.startsWith("$projectBasePath/")
+        return if (isWithinProject) {
+            FileUtil.getRelativePath(projectBasePath, normalizedPath, '/') ?: normalizedPath
+        } else {
+            normalizedPath
+        }
     }
 
     fun resolveStoredFile(storedPath: String): VirtualFile? {
@@ -121,7 +126,7 @@ class ArbProjectOverridesService(
             val basePath = project.basePath?.let(FileUtil::toSystemIndependentName) ?: return null
             "$basePath/$normalizedPath"
         }
-        return LocalFileSystem.getInstance().refreshAndFindFileByPath(absolutePath)
+        return LocalFileSystem.getInstance().refreshAndFindFileByIoFile(File(absolutePath).canonicalFile)
     }
 
     private fun getOrCreateScope(scopeDir: VirtualFile): ArbScopeOverride {

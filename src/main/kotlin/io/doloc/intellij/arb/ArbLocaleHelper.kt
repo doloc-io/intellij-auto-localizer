@@ -4,7 +4,7 @@ import com.intellij.openapi.vfs.VirtualFile
 
 object ArbLocaleHelper {
     private val LOCALE_SUFFIX_PATTERN =
-        Regex("(?:^|[._-])([A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8}){0,2})$", RegexOption.IGNORE_CASE)
+        Regex("[._-]([A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8}){0,2})$", RegexOption.IGNORE_CASE)
     private val LOCALE_ONLY_PATTERN =
         Regex("^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8}){0,2}$", RegexOption.IGNORE_CASE)
 
