@@ -25,6 +25,7 @@ class DolocConfigurable : Configurable {
     private lateinit var xliff12NewStateRadioButtons: Map<String, JRadioButton>
     private lateinit var xliff20UntranslatedCheckboxes: Map<String, JCheckBox>
     private lateinit var xliff20NewStateRadioButtons: Map<String, JRadioButton>
+    private lateinit var arbUntranslatedCheckboxes: Map<String, JCheckBox>
     private lateinit var showReminderCheckbox: JCheckBox
 
     override fun getDisplayName(): String = "Auto Localizer"
@@ -87,6 +88,25 @@ class DolocConfigurable : Configurable {
 
         gbc.gridy++
         mainPanel.add(xliff20Panel, gbc)
+
+        gbc.gridy++
+        mainPanel.add(Box.createVerticalStrut(10), gbc)
+
+        // 5. ARB Settings Section
+        val (arbPanel, arbCheckboxes) = createArbSettingsSection(
+            utmUrl("https://doloc.io/getting-started/formats/arb/", "settings_arb"),
+            settingsState.arbUntranslatedStates
+        )
+        arbUntranslatedCheckboxes = arbCheckboxes
+
+        gbc.gridy++
+        mainPanel.add(arbPanel, gbc)
+
+        gbc.gridy++
+        mainPanel.add(Box.createVerticalStrut(10), gbc)
+
+        gbc.gridy++
+        mainPanel.add(createProjectScopeNotice(), gbc)
 
         // Add vertical glue to push everything to the top
         gbc.gridy++
@@ -338,6 +358,61 @@ class DolocConfigurable : Configurable {
         )
     }
 
+    private fun createArbSettingsSection(
+        docsUrl: String,
+        currentUntranslatedStates: Set<String>
+    ): Pair<JComponent, Map<String, JCheckBox>> {
+        val panel = JPanel(GridBagLayout())
+        val gbc = GridBagConstraints().apply {
+            gridx = 0
+            gridy = 0
+            gridwidth = GridBagConstraints.REMAINDER
+            weightx = 1.0
+            fill = GridBagConstraints.HORIZONTAL
+            anchor = GridBagConstraints.NORTHWEST
+        }
+
+        panel.add(createSectionHeader("ARB"), gbc)
+
+        gbc.gridy++
+        gbc.insets = JBUI.insets(3, 20, 5, 0)
+        val linkLabel = LinkLabel<Any?>("Learn more about ARB options", null).apply {
+            setListener({ _, _ -> BrowserUtil.browse(docsUrl) }, null)
+        }
+        panel.add(linkLabel, gbc)
+
+        gbc.gridy++
+        gbc.insets = JBUI.insets(5, 20, 0, 0)
+        panel.add(JLabel("Translate when target text is:"), gbc)
+
+        val checkboxPanel = JPanel(GridLayout(0, 1, 0, 0))
+        val checkboxMap = getArbUntranslatedStates().associate { (value, label) ->
+            val checkbox = JCheckBox(label)
+            checkbox.isSelected = currentUntranslatedStates.contains(value)
+            checkboxPanel.add(checkbox)
+            value to checkbox
+        }
+
+        gbc.gridy++
+        panel.add(checkboxPanel, gbc)
+
+        return panel to checkboxMap
+    }
+
+    private fun createProjectScopeNotice(): JComponent {
+        return JLabel(
+            "<html><b>Note:</b> API token, reminder, XLIFF, and ARB untranslated options are app-level. ARB base and language overrides are project-level and configurable in the project's dedicated settings page.</html>"
+        )
+    }
+
+    private fun getArbUntranslatedStates(): List<Pair<String, String>> {
+        return listOf(
+            "missing" to "Missing in target file",
+            "empty" to "Present but empty",
+            "equal" to "Equal to source text"
+        )
+    }
+
     override fun isModified(): Boolean {
         val settingsState = DolocSettingsState.getInstance()
 
@@ -365,9 +440,15 @@ class DolocConfigurable : Configurable {
         val selectedXliff20NewState = xliff20NewStateRadioButtons
             .firstNotNullOfOrNull { (value, radio) -> if (radio.isSelected) value else null }
 
+        val selectedArbUntranslated = arbUntranslatedCheckboxes
+            .filter { (_, checkbox) -> checkbox.isSelected }
+            .map { (value, _) -> value }
+            .toSet()
+
         return currentToken != storedToken ||
                selectedXliff12Untranslated != settingsState.xliff12UntranslatedStates ||
                selectedXliff20Untranslated != settingsState.xliff20UntranslatedStates ||
+               selectedArbUntranslated != settingsState.arbUntranslatedStates ||
                selectedXliff12NewState != settingsState.xliff12NewState ||
                selectedXliff20NewState != settingsState.xliff20NewState ||
                showReminderCheckbox.isSelected != settingsState.showReminderToast ||
@@ -394,6 +475,11 @@ class DolocConfigurable : Configurable {
 
         // Save XLIFF 2.0 untranslated states
         settingsState.xliff20UntranslatedStates = xliff20UntranslatedCheckboxes
+            .filter { (_, checkbox) -> checkbox.isSelected }
+            .map { (value, _) -> value }
+            .toMutableSet()
+
+        settingsState.arbUntranslatedStates = arbUntranslatedCheckboxes
             .filter { (_, checkbox) -> checkbox.isSelected }
             .map { (value, _) -> value }
             .toMutableSet()
@@ -428,6 +514,10 @@ class DolocConfigurable : Configurable {
         // Reset XLIFF 2.0 untranslated states
         xliff20UntranslatedCheckboxes.forEach { (value, checkbox) ->
             checkbox.isSelected = settingsState.xliff20UntranslatedStates.contains(value)
+        }
+
+        arbUntranslatedCheckboxes.forEach { (value, checkbox) ->
+            checkbox.isSelected = settingsState.arbUntranslatedStates.contains(value)
         }
 
         // Reset new states

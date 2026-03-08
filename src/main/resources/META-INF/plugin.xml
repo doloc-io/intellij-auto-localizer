@@ -14,16 +14,16 @@
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
     <description><![CDATA[
-<p>Automatically translate XLIFF (.xlf) files.
+<p>Automatically translate XLIFF (.xlf/.xliff) and ARB (.arb) files.
 Uses existing translations to generate accurate and context-aware translations.
 High quality localization with one click!</p>
 <h3>Key features:</h3>
 <p>
 <ul>
-  <li>"Translate with Auto Localizer" action in the context menu of XLIFF files</li>
-  <li>Supports XLIFF 1.2 and XLIFF 2.0 formats</li>
+  <li>"Translate with Auto Localizer" action in the context menu of XLIFF and ARB files</li>
+  <li>Supports XLIFF 1.2, XLIFF 2.0, and Flutter-style ARB workflows</li>
   <li>Configurable for different translation states (e.g., initial, new, ...)</li>
-  <li>Notification for untranslated segments on saving XLIFF files</li>
+  <li>Notifications for untranslated XLIFF segments and ARB translation reminders on save</li>
   <li>Powered by <a href="https://doloc.io?utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=plugin_description_powered">doloc.io</a>, a translation service that uses AI to provide high-quality translations</li>
   <li>Free and without registration for translation files with up to 100 texts</li>
 </ul>
@@ -31,9 +31,9 @@ High quality localization with one click!</p>
 <h3>Getting started:</h3>
 <p>
 <ol>
-    <li>Right-click on an XLIFF file in the Project View or Editor</li>
+    <li>Right-click on an XLIFF or ARB file in the Project View or Editor</li>
     <li>Select "Translate with Auto Localizer" from the context menu</li>
-    <li>The plugin will automatically translate the segments in the file using the doloc service</li>
+    <li>The plugin will automatically translate the selected file or target files using the doloc service</li>
     <li>To configure, open <b>File | Settings | Tools | Auto Localizer</b></li>
 </ol>
 
@@ -41,14 +41,15 @@ Optionally:
 <ul>
   <li>Create a (free) account on <a href="https://doloc.io?utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=plugin_description_signup">doloc.io</a></li>
   <li>Enter your API key in the settings (apply for a paid plan for larger text quota)</li>
-  <li>Configure the translation state for which the plugin should translate segments</li>
-  <li>Enable/disable the notification for untranslated segments on saving XLIFF files</li>
+  <li>Configure XLIFF states and ARB untranslated rules</li>
+  <li>Enable/disable translation reminder notifications on save</li>
 </ul>
 </p>
   ]]></description>
     <change-notes><![CDATA[
 <h2>Improvements</h2>
 <ul>
+  <li>Add ARB translation support with Flutter-aware base file heuristics, directory-scoped overrides, and ARB save reminders.</li>
   <li>Stop translations early when the target language attribute is missing and offer a quick fix based on the file name.</li>
 </ul>
 <h2>Bug Fixes</h2>
@@ -74,6 +75,12 @@ Optionally:
                 instance="io.doloc.intellij.settings.DolocConfigurable"
                 id="io.doloc.intellij.settings.DolocConfigurable"
                 displayName="Auto Localizer"/>
+        <projectConfigurable
+                parentId="tools"
+                instance="io.doloc.intellij.settings.ArbProjectOverridesConfigurable"
+                id="io.doloc.intellij.settings.ArbProjectOverridesConfigurable"
+                displayName="Auto Localizer ARB Overrides"
+                nonDefaultProject="true"/>
     </extensions>
 
     <actions>
@@ -81,7 +88,7 @@ Optionally:
                 id="io.doloc.intellij.action.TranslateWithDolocAction"
                 class="io.doloc.intellij.action.TranslateWithDolocAction"
                 text="Translate with Auto Localizer"
-                description="Translate XLIFF file with doloc service">
+                description="Translate XLIFF or ARB files with doloc service">
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
         </action>
     </actions>

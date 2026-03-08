@@ -2,6 +2,7 @@ package io.doloc.intellij.api
 
 import com.intellij.openapi.vfs.VirtualFile
 import io.doloc.intellij.service.DolocSettingsService
+import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.net.http.HttpRequest
 
@@ -40,6 +41,40 @@ object DolocRequestBuilder {
             .build()
     }
 
+    fun createArbTranslationRequest(
+        sourceFile: VirtualFile,
+        targetFile: VirtualFile,
+        untranslatedStates: Set<String>,
+        sourceLang: String?,
+        targetLang: String?
+    ): HttpRequest {
+        val token = DolocSettingsService.getInstance().getApiToken()
+            ?: throw IllegalStateException("No API token available")
+
+        val queryString = DolocQueryBuilder.buildArbTranslateQueryString(
+            untranslated = untranslatedStates,
+            sourceLang = sourceLang,
+            targetLang = targetLang
+        )
+
+        val boundary = "----DolocBoundary${System.currentTimeMillis()}"
+        val body = buildMultipartBody(
+            boundary,
+            listOf(
+                MultipartPart("source", sourceFile.name, sourceFile.contentsToByteArray()),
+                MultipartPart("target", targetFile.name, targetFile.contentsToByteArray())
+            )
+        )
+
+        return HttpRequest.newBuilder()
+            .uri(URI("$BASE_URL$queryString"))
+            .header("Authorization", "Bearer $token")
+            .header("Accept", "application/octet-stream")
+            .header("Content-Type", "multipart/form-data; boundary=$boundary")
+            .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+            .build()
+    }
+
     fun setBaseUrl(newBaseUrl: String) {
         if (newBaseUrl.isBlank()) {
             throw IllegalArgumentException("Base URL cannot be blank")
@@ -49,5 +84,26 @@ object DolocRequestBuilder {
 
     fun getBaseUrl(): String {
         return BASE_URL
+    }
+
+    private data class MultipartPart(
+        val name: String,
+        val fileName: String,
+        val bytes: ByteArray
+    )
+
+    private fun buildMultipartBody(boundary: String, parts: List<MultipartPart>): ByteArray {
+        val output = ByteArrayOutputStream()
+        parts.forEach { part ->
+            output.write("--$boundary\r\n".toByteArray())
+            output.write(
+                "Content-Disposition: form-data; name=\"${part.name}\"; filename=\"${part.fileName}\"\r\n".toByteArray()
+            )
+            output.write("Content-Type: application/octet-stream\r\n\r\n".toByteArray())
+            output.write(part.bytes)
+            output.write("\r\n".toByteArray())
+        }
+        output.write("--$boundary--\r\n".toByteArray())
+        return output.toByteArray()
     }
 }

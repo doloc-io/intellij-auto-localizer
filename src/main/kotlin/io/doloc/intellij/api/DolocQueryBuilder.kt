@@ -4,6 +4,10 @@ package io.doloc.intellij.api
  * Builds query strings for doloc API endpoints
  */
 object DolocQueryBuilder {
+    private fun appendParam(params: MutableList<String>, key: String, value: String?) {
+        if (value.isNullOrBlank()) return
+        params.add("$key=$value")
+    }
     
     /**
      * Builds a query string for the translate endpoint
@@ -25,12 +29,27 @@ object DolocQueryBuilder {
         }
         
         // Add new state if provided
-        newState?.let {
-            if (it.isNotEmpty()) {
-                params.add("newState=$it")
-            }
+        appendParam(params, "newState", newState)
+
+        return if (params.isEmpty()) {
+            ""
+        } else {
+            "?${params.joinToString("&")}"
         }
-        
+    }
+
+    fun buildArbTranslateQueryString(
+        untranslated: Set<String>,
+        sourceLang: String?,
+        targetLang: String?
+    ): String {
+        val params = mutableListOf<String>()
+        if (untranslated.isNotEmpty()) {
+            params.add("untranslated=${untranslated.joinToString(",")}")
+        }
+        appendParam(params, "sourceLang", sourceLang)
+        appendParam(params, "targetLang", targetLang)
+
         return if (params.isEmpty()) {
             ""
         } else {
