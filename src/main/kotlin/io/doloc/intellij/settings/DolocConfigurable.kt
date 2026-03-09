@@ -102,12 +102,6 @@ class DolocConfigurable : Configurable {
         gbc.gridy++
         mainPanel.add(arbPanel, gbc)
 
-        gbc.gridy++
-        mainPanel.add(Box.createVerticalStrut(10), gbc)
-
-        gbc.gridy++
-        mainPanel.add(createProjectScopeNotice(), gbc)
-
         // Add vertical glue to push everything to the top
         gbc.gridy++
         gbc.weighty = 1.0
@@ -397,12 +391,6 @@ class DolocConfigurable : Configurable {
         panel.add(checkboxPanel, gbc)
 
         return panel to checkboxMap
-    }
-
-    private fun createProjectScopeNotice(): JComponent {
-        return JLabel(
-            "<html><b>Note:</b> API token, reminder, XLIFF, and ARB untranslated options are app-level. ARB base and language overrides are project-level and configurable in the project's dedicated settings page.</html>"
-        )
     }
 
     private fun getArbUntranslatedStates(): List<Pair<String, String>> {

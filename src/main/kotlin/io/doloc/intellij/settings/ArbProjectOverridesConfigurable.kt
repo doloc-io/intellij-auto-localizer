@@ -24,17 +24,11 @@ class ArbProjectOverridesConfigurable(
     private var component: JComponent? = null
     private var contentPanel: JPanel? = null
 
-    override fun getDisplayName(): String = "Auto Localizer ARB Overrides"
+    override fun getDisplayName(): String = "ARB Overrides"
 
     override fun createComponent(): JComponent {
-        val panel = JPanel(BorderLayout(0, JBUI.scale(10)))
+        val panel = JPanel(BorderLayout())
         panel.border = JBUI.Borders.empty(10)
-        panel.add(
-            JLabel(
-                "<html>These settings are <b>project-level</b>. They override Flutter `l10n.yaml` only within the same nearest scope directory. App-level token and untranslated defaults stay on the main Auto Localizer settings page.</html>"
-            ),
-            BorderLayout.NORTH
-        )
 
         contentPanel = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)

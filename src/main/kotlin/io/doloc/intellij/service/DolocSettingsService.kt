@@ -3,10 +3,17 @@ package io.doloc.intellij.service
 import com.intellij.credentialStore.CredentialAttributes
 import com.intellij.credentialStore.Credentials
 import com.intellij.ide.passwordSafe.PasswordSafe
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.Service.Level
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.options.ShowSettingsUtil
+import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.project.ProjectManager
 import io.doloc.intellij.auth.AnonymousTokenManager
 import io.doloc.intellij.settings.DolocSettingsState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,12 +25,17 @@ import kotlinx.coroutines.runBlocking
 class DolocSettingsService {
 
     private val logger = Logger.getInstance(DolocSettingsService::class.java)
-    // Keep the legacy key so existing users don't have to re-enter their token
     private val manualTokenKey = "io.doloc.intellij.apiToken"
     private val anonymousTokenKey = "io.doloc.intellij.anonymousApiToken"
-    private val _tokenFlow = MutableStateFlow<String?>(null) // manual token flow
+    private val _tokenFlow = MutableStateFlow<String?>(null)
+    private val tokenStore: TokenStore = tokenStoreFactory()
+    @Volatile
+    private var tokenStoreAvailable = true
+    @Volatile
+    private var tokenStoreWarningShown = false
+    private var manualTokenFallback: String? = null
+    private var anonymousTokenFallback: String? = null
 
-    // Lazy-initialized token manager
     private val anonymousTokenManager by lazy { AnonymousTokenManager(this) }
 
     val tokenFlow: StateFlow<String?>
@@ -65,13 +77,11 @@ class DolocSettingsService {
      * Returns the stored token without attempting to create an anonymous one
      */
     fun getStoredManualToken(): String? {
-        val credentials = PasswordSafe.instance.get(createCredentialAttributes(manualTokenKey))
-        return credentials?.getPasswordAsString()
+        return readToken(manualTokenKey, manualTokenFallback) { manualTokenFallback = it }
     }
 
     fun getStoredAnonymousToken(): String? {
-        val credentials = PasswordSafe.instance.get(createCredentialAttributes(anonymousTokenKey))
-        return credentials?.getPasswordAsString()
+        return readToken(anonymousTokenKey, anonymousTokenFallback) { anonymousTokenFallback = it }
     }
 
     /**
@@ -83,8 +93,7 @@ class DolocSettingsService {
             return
         }
 
-        val credentials = Credentials(manualTokenKey, token)
-        PasswordSafe.instance.set(createCredentialAttributes(manualTokenKey), credentials)
+        writeToken(manualTokenKey, token) { manualTokenFallback = it }
         _tokenFlow.value = token
     }
 
@@ -93,30 +102,160 @@ class DolocSettingsService {
             clearAnonymousToken()
             return
         }
-        val credentials = Credentials(anonymousTokenKey, token)
-        PasswordSafe.instance.set(createCredentialAttributes(anonymousTokenKey), credentials)
+        writeToken(anonymousTokenKey, token) { anonymousTokenFallback = it }
     }
 
     /**
      * Clears the stored manual API token
      */
     fun clearApiToken() {
-        PasswordSafe.instance.set(createCredentialAttributes(manualTokenKey), null)
+        writeToken(manualTokenKey, null) { manualTokenFallback = it }
         _tokenFlow.value = null
     }
 
     fun clearAnonymousToken() {
-        PasswordSafe.instance.set(createCredentialAttributes(anonymousTokenKey), null)
+        writeToken(anonymousTokenKey, null) { anonymousTokenFallback = it }
     }
 
-    private fun createCredentialAttributes(key: String): CredentialAttributes {
-        return CredentialAttributes(key) // TODO constructor deprecated
+    private fun readToken(key: String, fallback: String?, updateFallback: (String?) -> Unit): String? {
+        if (!tokenStoreAvailable) {
+            return fallback
+        }
+
+        return try {
+            tokenStore.read(key).also(updateFallback)
+        } catch (e: ProcessCanceledException) {
+            throw e
+        } catch (t: Throwable) {
+            disableTokenStore(t)
+            fallback
+        }
+    }
+
+    private fun writeToken(key: String, token: String?, updateFallback: (String?) -> Unit) {
+        updateFallback(token)
+        if (!tokenStoreAvailable) {
+            return
+        }
+
+        try {
+            tokenStore.write(key, token)
+        } catch (e: ProcessCanceledException) {
+            throw e
+        } catch (t: Throwable) {
+            disableTokenStore(t)
+        }
+    }
+
+    private fun disableTokenStore(t: Throwable) {
+        if (!tokenStoreAvailable) {
+            return
+        }
+
+        tokenStoreAvailable = false
+        logger.warn(
+            "Password Safe is unavailable; falling back to in-memory token storage for this IDE session.",
+            t
+        )
+        notifyTokenStoreUnavailable(t)
+    }
+
+    private fun notifyTokenStoreUnavailable(t: Throwable) {
+        if (tokenStoreWarningShown) {
+            return
+        }
+
+        tokenStoreWarningShown = true
+        tokenStoreFailureNotifier(t)
     }
 
     companion object {
+        internal var tokenStoreFactory: () -> TokenStore = { PasswordSafeTokenStore() }
+        internal var tokenStoreFailureNotifier: (Throwable) -> Unit = { PasswordSafeUnavailableNotifier.notify(it) }
+
+        internal fun resetTokenStoreFactory() {
+            tokenStoreFactory = { PasswordSafeTokenStore() }
+        }
+
+        internal fun resetTokenStoreFailureNotifier() {
+            tokenStoreFailureNotifier = { PasswordSafeUnavailableNotifier.notify(it) }
+        }
+
         @JvmStatic
         fun getInstance(): DolocSettingsService {
             return ApplicationManager.getApplication().getService(DolocSettingsService::class.java)
         }
+    }
+}
+
+internal interface TokenStore {
+    fun read(key: String): String?
+    fun write(key: String, token: String?)
+}
+
+private class PasswordSafeTokenStore : TokenStore {
+    override fun read(key: String): String? {
+        val credentials = PasswordSafe.instance.get(createCredentialAttributes(key))
+        return credentials?.getPasswordAsString()
+    }
+
+    override fun write(key: String, token: String?) {
+        val credentials = token?.let { Credentials(key, it) }
+        PasswordSafe.instance.set(createCredentialAttributes(key), credentials)
+    }
+
+    private fun createCredentialAttributes(key: String): CredentialAttributes {
+        return CredentialAttributes(key)
+    }
+}
+
+private data class PasswordSafeUnavailableMessage(
+    val title: String,
+    val content: String
+)
+
+private object PasswordSafeUnavailableNotifier {
+    private const val PASSWORD_SETTINGS_NAME = "Passwords"
+
+    fun notify(cause: Throwable) {
+        val message = buildMessage(cause)
+        ApplicationManager.getApplication().invokeLater {
+            val notification = NotificationGroupManager.getInstance()
+                .getNotificationGroup("Doloc Translation")
+                .createNotification(message.title, message.content, NotificationType.WARNING)
+                .addAction(object : AnAction("Open Password Settings") {
+                    override fun actionPerformed(e: AnActionEvent) {
+                        val project = e.project ?: ProjectManager.getInstance().openProjects.firstOrNull()
+                        ShowSettingsUtil.getInstance().showSettingsDialog(project, PASSWORD_SETTINGS_NAME)
+                    }
+                })
+
+            notification.notify(ProjectManager.getInstance().openProjects.firstOrNull())
+        }
+    }
+
+    private fun buildMessage(cause: Throwable): PasswordSafeUnavailableMessage {
+        return if (hasMessage(cause, "libsecret-1")) {
+            PasswordSafeUnavailableMessage(
+                title = "Linux password storage is unavailable",
+                content = "Auto Localizer cannot use IntelliJ Password Safe because <code>libsecret-1</code> is missing. Install <code>libsecret-1-0</code> on Debian/Ubuntu or <code>libsecret</code> on Fedora/Arch, or switch IntelliJ password storage to KeePass / In Memory in Settings | Appearance &amp; Behavior | System Settings | Passwords. Tokens are kept only for this IDE session."
+            )
+        } else {
+            PasswordSafeUnavailableMessage(
+                title = "Password storage is unavailable",
+                content = "Auto Localizer cannot use IntelliJ Password Safe. Switch IntelliJ password storage to KeePass / In Memory in Settings | Appearance &amp; Behavior | System Settings | Passwords. Tokens are kept only for this IDE session."
+            )
+        }
+    }
+
+    private fun hasMessage(throwable: Throwable?, fragment: String): Boolean {
+        var current = throwable
+        while (current != null) {
+            if (current.message?.contains(fragment, ignoreCase = true) == true) {
+                return true
+            }
+            current = current.cause
+        }
+        return false
     }
 }

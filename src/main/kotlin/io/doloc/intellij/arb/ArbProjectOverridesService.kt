@@ -10,7 +10,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.util.xmlb.XmlSerializerUtil
 import java.io.File
 
 @Service(Service.Level.PROJECT)
@@ -20,7 +19,7 @@ import java.io.File
 )
 class ArbProjectOverridesService(
     private val project: Project
-) : PersistentStateComponent<ArbProjectOverridesService> {
+) : PersistentStateComponent<ArbProjectOverridesService.State> {
     data class ArbTargetOverride(
         var targetFile: String = "",
         var targetLang: String = ""
@@ -33,12 +32,22 @@ class ArbProjectOverridesService(
         var targetOverrides: MutableList<ArbTargetOverride> = mutableListOf()
     )
 
-    var scopes: MutableList<ArbScopeOverride> = mutableListOf()
+    data class State(
+        var scopes: MutableList<ArbScopeOverride> = mutableListOf()
+    )
 
-    override fun getState(): ArbProjectOverridesService = this
+    private var state = State()
 
-    override fun loadState(state: ArbProjectOverridesService) {
-        XmlSerializerUtil.copyBean(state, this)
+    private var scopes: MutableList<ArbScopeOverride>
+        get() = state.scopes
+        set(value) {
+            state = State(scopes = copyScopes(value))
+        }
+
+    override fun getState(): State = State(scopes = copyScopes(scopes))
+
+    override fun loadState(state: State) {
+        scopes = state.scopes
     }
 
     fun getScopeSnapshot(): List<ArbScopeOverride> {
@@ -133,6 +142,12 @@ class ArbProjectOverridesService(
         val storedScope = toStoredPath(scopeDir.path)
         return scopes.firstOrNull { it.scopeDir == storedScope } ?: ArbScopeOverride(scopeDir = storedScope)
             .also { scopes += it }
+    }
+
+    private fun copyScopes(source: List<ArbScopeOverride>): MutableList<ArbScopeOverride> {
+        return source.map { scope ->
+            scope.copy(targetOverrides = scope.targetOverrides.map { it.copy() }.toMutableList())
+        }.toMutableList()
     }
 
     companion object {
