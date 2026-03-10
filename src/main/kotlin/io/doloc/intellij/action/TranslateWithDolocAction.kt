@@ -21,11 +21,9 @@ import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import io.doloc.intellij.api.DolocRequestBuilder
 import io.doloc.intellij.arb.ArbPairResolver
-import io.doloc.intellij.arb.ArbProjectOverridesService
-import io.doloc.intellij.arb.ArbResolutionDialog
-import io.doloc.intellij.arb.ArbSelectionPlanner
 import io.doloc.intellij.arb.ArbTranslationJob
 import io.doloc.intellij.arb.ArbTranslationTargetsFinder
+import io.doloc.intellij.arb.ArbTranslationWorkflow
 import io.doloc.intellij.http.HttpClientProvider
 import io.doloc.intellij.service.DolocSettingsService
 import io.doloc.intellij.settings.DolocConfigurable
@@ -44,6 +42,14 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         NotificationGroupManager.getInstance().getNotificationGroup("Doloc Translation")
     private val arbPairResolver = ArbPairResolver()
     private val arbTargetsFinder = ArbTranslationTargetsFinder(arbPairResolver)
+    private val arbWorkflow = ArbTranslationWorkflow(
+        pairResolver = arbPairResolver,
+        targetsFinder = arbTargetsFinder,
+        ensureApiToken = ::ensureApiToken,
+        confirmOverwriteTargets = ::confirmOverwriteTargets,
+        confirmFanOut = ::confirmArbFanOut,
+        executeJobs = ::executeArbJobs
+    )
 
     override fun update(e: AnActionEvent) {
         val project = e.project
@@ -171,121 +177,11 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
     }
 
     fun performArbTranslation(project: Project, files: List<VirtualFile>) {
-        if (!ensureApiToken(project)) return
-
-        FileDocumentManager.getInstance().saveAllDocuments()
-
-        val planner = ArbSelectionPlanner(arbPairResolver)
-        val plan = planner.planExplicitSelection(project, files)
-        val jobs = resolveArbPlan(project, planner, plan) ?: return
-        if (jobs.isEmpty()) return
-
-        if (!confirmOverwriteTargets(project, jobs.map { it.targetFile })) {
-            return
-        }
-
-        executeArbJobs(project, jobs, "Translating ARB files")
+        arbWorkflow.performTranslation(project, files)
     }
 
     fun performArbBaseTranslation(project: Project, baseFile: VirtualFile) {
-        if (!ensureApiToken(project)) return
-
-        FileDocumentManager.getInstance().saveAllDocuments()
-
-        val filteredTargets = arbTargetsFinder.findTargetsNeedingTranslation(
-            project,
-            baseFile,
-            DolocSettingsState.getInstance().arbUntranslatedStates
-        )
-
-        if (filteredTargets.isEmpty()) {
-            Messages.showInfoMessage(
-                project,
-                "No target ARB files need translation for ${baseFile.name}.",
-                "Auto Localizer"
-            )
-            return
-        }
-
-        val planner = ArbSelectionPlanner(arbPairResolver)
-        val plan = planner.planBaseSelection(project, baseFile, filteredTargets)
-        val jobs = resolveArbPlan(project, planner, plan) ?: return
-        if (jobs.isEmpty()) return
-
-        if (!confirmArbFanOut(project, baseFile, filteredTargets)) {
-            return
-        }
-
-        if (!confirmOverwriteTargets(project, jobs.map { it.targetFile })) {
-            return
-        }
-
-        executeArbJobs(project, jobs, "Translating ${baseFile.name} to target ARB files")
-    }
-
-    private fun resolveArbPlan(
-        project: Project,
-        planner: ArbSelectionPlanner,
-        plan: ArbSelectionPlanner.PlanResult
-    ): List<ArbTranslationJob>? {
-        val confirmationTargets = when (plan) {
-            is ArbSelectionPlanner.PlanResult.Ready -> plan.confirmationTargets
-            is ArbSelectionPlanner.PlanResult.PromptRequired -> plan.confirmationTargets
-            is ArbSelectionPlanner.PlanResult.Abort -> emptyList()
-        }
-
-        return when (plan) {
-            is ArbSelectionPlanner.PlanResult.Abort -> {
-                Messages.showInfoMessage(project, plan.message, plan.title)
-                null
-            }
-
-            is ArbSelectionPlanner.PlanResult.Ready -> plan.jobs
-
-            is ArbSelectionPlanner.PlanResult.PromptRequired -> {
-                val dialog = ArbResolutionDialog(project, plan.scopeDir, plan.resolutions)
-                if (!dialog.showAndGet()) {
-                    null
-                } else {
-                    val result = dialog.result ?: return null
-                    val promptResolution = planner.resolvePromptResult(plan, result)
-                    if (promptResolution.selectedBaseFile != null) {
-                        if (result.rememberScope) {
-                            ArbProjectOverridesService.getInstance(project).saveScopeOverride(
-                                plan.scopeDir,
-                                result.baseFile,
-                                result.sourceLang
-                            )
-                        }
-                        performArbBaseTranslation(project, promptResolution.selectedBaseFile)
-                        return null
-                    }
-                    persistPromptOverrides(project, plan.scopeDir, result, promptResolution.jobs)
-                    promptResolution.jobs
-                }
-            }
-        }?.also {
-            if (confirmationTargets.isNotEmpty() && it.isEmpty()) {
-                Messages.showInfoMessage(project, "No ARB target files need translation.", "Auto Localizer")
-            }
-        }
-    }
-
-    private fun persistPromptOverrides(
-        project: Project,
-        scopeDir: VirtualFile,
-        result: ArbResolutionDialog.Result,
-        jobs: List<ArbTranslationJob>
-    ) {
-        val overrides = ArbProjectOverridesService.getInstance(project)
-        if (result.rememberScope) {
-            overrides.saveScopeOverride(scopeDir, result.baseFile, result.sourceLang)
-        }
-        jobs.forEach { job ->
-            if (job.targetFile.path in result.rememberedTargets) {
-                overrides.saveTargetLanguage(job.scopeDir, job.targetFile, job.targetLang)
-            }
-        }
+        arbWorkflow.performBaseTranslation(project, baseFile)
     }
 
     private fun executeArbJobs(project: Project, jobs: List<ArbTranslationJob>, taskTitle: String) {
