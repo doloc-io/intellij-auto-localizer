@@ -12,12 +12,13 @@ object ArbHeuristics {
     )
 
     fun findBaseCandidates(targetFile: VirtualFile, scopeContext: ScopeContext): List<VirtualFile> {
+        val arbFiles = collectArbFiles(scopeContext.searchRoot)
         val candidates = linkedMapOf<String, VirtualFile>()
 
         standardFlutterCandidate(targetFile, scopeContext)?.let { candidates[it.path] = it }
         addDirectoryLocaleCandidates(targetFile, candidates)
-        addFilenameLocaleCandidates(targetFile, scopeContext.searchRoot, candidates)
-        addSameFamilyCandidates(targetFile, scopeContext.searchRoot, candidates)
+        addFilenameLocaleCandidates(targetFile, arbFiles, candidates)
+        addSameFamilyCandidates(targetFile, arbFiles, candidates)
 
         return candidates.values.toList()
     }
@@ -55,7 +56,7 @@ object ArbHeuristics {
 
     private fun addFilenameLocaleCandidates(
         targetFile: VirtualFile,
-        searchRoot: VirtualFile,
+        arbFiles: List<VirtualFile>,
         candidates: MutableMap<String, VirtualFile>
     ) {
         preferredSourceLocales.forEach { locale ->
@@ -66,7 +67,7 @@ object ArbHeuristics {
                 return@forEach
             }
 
-            val matches = collectArbFiles(searchRoot).filter { it.name.equals(candidateName, ignoreCase = true) }
+            val matches = arbFiles.filter { it.name.equals(candidateName, ignoreCase = true) }
             if (matches.size == 1) {
                 candidates[matches.single().path] = matches.single()
             }
@@ -75,12 +76,11 @@ object ArbHeuristics {
 
     private fun addSameFamilyCandidates(
         targetFile: VirtualFile,
-        searchRoot: VirtualFile,
+        arbFiles: List<VirtualFile>,
         candidates: MutableMap<String, VirtualFile>
     ) {
         val targetLocale = ArbLocaleHelper.guessLocaleFromPath(targetFile)
-        val files = collectArbFiles(searchRoot).filter { it.path != targetFile.path }
-        val sameFamily = files.filter { candidate ->
+        val sameFamily = arbFiles.filter { it.path != targetFile.path }.filter { candidate ->
             sameFamily(candidate.name, targetFile.name) &&
                 preferredSourceLocales.any { locale ->
                     ArbLocaleHelper.guessLocaleFromPath(candidate)?.equals(locale, ignoreCase = true) == true
@@ -100,12 +100,17 @@ object ArbHeuristics {
     }
 
     fun isLikelyBaseFile(file: VirtualFile, searchRoot: VirtualFile): Boolean {
+        val arbFiles = collectArbFiles(searchRoot)
+        return isLikelyBaseFile(file, arbFiles)
+    }
+
+    private fun isLikelyBaseFile(file: VirtualFile, arbFiles: List<VirtualFile>): Boolean {
         val locale = ArbLocaleHelper.guessLocaleFromPath(file) ?: return false
         if (preferredSourceLocales.none { it.equals(locale, ignoreCase = true) }) {
             return false
         }
 
-        if (collectArbFiles(searchRoot).any { candidate ->
+        if (arbFiles.any { candidate ->
                 candidate.path != file.path && sameFamily(candidate.name, file.name)
         }) {
             return true
