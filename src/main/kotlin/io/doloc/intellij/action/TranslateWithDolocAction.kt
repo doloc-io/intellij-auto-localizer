@@ -177,7 +177,7 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
 
         val planner = ArbSelectionPlanner(arbPairResolver)
         val plan = planner.planExplicitSelection(project, files)
-        val jobs = resolveArbPlan(project, plan) ?: return
+        val jobs = resolveArbPlan(project, planner, plan) ?: return
         if (jobs.isEmpty()) return
 
         if (!confirmOverwriteTargets(project, jobs.map { it.targetFile })) {
@@ -209,7 +209,7 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
 
         val planner = ArbSelectionPlanner(arbPairResolver)
         val plan = planner.planBaseSelection(project, baseFile, filteredTargets)
-        val jobs = resolveArbPlan(project, plan, filteredTargets) ?: return
+        val jobs = resolveArbPlan(project, planner, plan) ?: return
         if (jobs.isEmpty()) return
 
         if (!confirmArbFanOut(project, baseFile, filteredTargets)) {
@@ -225,9 +225,15 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
 
     private fun resolveArbPlan(
         project: Project,
-        plan: ArbSelectionPlanner.PlanResult,
-        confirmationTargets: List<VirtualFile> = emptyList()
+        planner: ArbSelectionPlanner,
+        plan: ArbSelectionPlanner.PlanResult
     ): List<ArbTranslationJob>? {
+        val confirmationTargets = when (plan) {
+            is ArbSelectionPlanner.PlanResult.Ready -> plan.confirmationTargets
+            is ArbSelectionPlanner.PlanResult.PromptRequired -> plan.confirmationTargets
+            is ArbSelectionPlanner.PlanResult.Abort -> emptyList()
+        }
+
         return when (plan) {
             is ArbSelectionPlanner.PlanResult.Abort -> {
                 Messages.showInfoMessage(project, plan.message, plan.title)
@@ -242,21 +248,8 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
                     null
                 } else {
                     val result = dialog.result ?: return null
-                    val jobs = plan.resolutions.mapNotNull { resolution ->
-                        if (resolution.targetFile.path == result.baseFile.path) {
-                            return@mapNotNull null
-                        }
-                        ArbTranslationJob(
-                            scopeDir = resolution.scope.scopeDir,
-                            baseFile = result.baseFile,
-                            targetFile = resolution.targetFile,
-                            sourceLang = result.sourceLang,
-                            targetLang = result.targetLangs[resolution.targetFile.path]
-                                ?: resolution.targetLang
-                                ?: return null
-                        )
-                    }
-                    if (jobs.isEmpty() && plan.resolutions.size == 1 && plan.resolutions.single().targetFile.path == result.baseFile.path) {
+                    val promptResolution = planner.resolvePromptResult(plan, result)
+                    if (promptResolution.selectedBaseFile != null) {
                         if (result.rememberScope) {
                             ArbProjectOverridesService.getInstance(project).saveScopeOverride(
                                 plan.scopeDir,
@@ -264,11 +257,11 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
                                 result.sourceLang
                             )
                         }
-                        performArbBaseTranslation(project, result.baseFile)
+                        performArbBaseTranslation(project, promptResolution.selectedBaseFile)
                         return null
                     }
-                    persistPromptOverrides(project, result, jobs)
-                    jobs
+                    persistPromptOverrides(project, plan.scopeDir, result, promptResolution.jobs)
+                    promptResolution.jobs
                 }
             }
         }?.also {
@@ -280,12 +273,13 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
 
     private fun persistPromptOverrides(
         project: Project,
+        scopeDir: VirtualFile,
         result: ArbResolutionDialog.Result,
         jobs: List<ArbTranslationJob>
     ) {
         val overrides = ArbProjectOverridesService.getInstance(project)
         if (result.rememberScope) {
-            overrides.saveScopeOverride(jobs.first().scopeDir, result.baseFile, result.sourceLang)
+            overrides.saveScopeOverride(scopeDir, result.baseFile, result.sourceLang)
         }
         jobs.forEach { job ->
             if (job.targetFile.path in result.rememberedTargets) {

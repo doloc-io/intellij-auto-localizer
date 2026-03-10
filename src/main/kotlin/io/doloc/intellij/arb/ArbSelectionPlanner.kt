@@ -6,6 +6,11 @@ import com.intellij.openapi.vfs.VirtualFile
 class ArbSelectionPlanner(
     private val resolver: ArbPairResolver
 ) {
+    data class PromptResolution(
+        val jobs: List<ArbTranslationJob>,
+        val selectedBaseFile: VirtualFile? = null
+    )
+
     sealed class PlanResult {
         data class Ready(
             val jobs: List<ArbTranslationJob>,
@@ -95,6 +100,31 @@ class ArbSelectionPlanner(
             jobs = resolutions.mapNotNull(::toJob),
             confirmationTargets = targets
         )
+    }
+
+    fun resolvePromptResult(plan: PlanResult.PromptRequired, result: ArbResolutionDialog.Result): PromptResolution {
+        val jobs = plan.resolutions.mapNotNull { resolution ->
+            if (resolution.targetFile.path == result.baseFile.path) {
+                return@mapNotNull null
+            }
+            ArbTranslationJob(
+                scopeDir = resolution.scope.scopeDir,
+                baseFile = result.baseFile,
+                targetFile = resolution.targetFile,
+                sourceLang = result.sourceLang,
+                targetLang = result.targetLangs[resolution.targetFile.path]
+                    ?: resolution.targetLang
+                    ?: return@mapNotNull null
+            )
+        }
+
+        val selectedBaseFile = result.baseFile.takeIf {
+            jobs.isEmpty() &&
+                plan.resolutions.size == 1 &&
+                plan.resolutions.single().targetFile.path == result.baseFile.path
+        }
+
+        return PromptResolution(jobs = jobs, selectedBaseFile = selectedBaseFile)
     }
 
     private fun toJob(resolution: ArbPairResolver.ArbTargetResolution): ArbTranslationJob? {
