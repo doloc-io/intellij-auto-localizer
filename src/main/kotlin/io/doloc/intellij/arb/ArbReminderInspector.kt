@@ -5,7 +5,7 @@ import com.intellij.openapi.vfs.VirtualFile
 
 class ArbReminderInspector(
     private val resolver: ArbPairResolver = ArbPairResolver(),
-    private val analyzer: ArbFileAnalyzer = ArbFileAnalyzer()
+    private val targetsFinder: ArbTranslationTargetsFinder = ArbTranslationTargetsFinder(resolver)
 ) {
     enum class ReminderType {
         TARGET,
@@ -21,11 +21,10 @@ class ArbReminderInspector(
     fun inspect(project: Project, file: VirtualFile, untranslatedRules: Set<String>): Reminder? {
         val scopeBase = resolver.resolveScopeBase(project, file) ?: return null
         return if (scopeBase.path == file.path) {
-            val targets = resolver.inferTargetFiles(project, file)
-                .filter { analyzer.analyze(file, it, untranslatedRules).hasUntranslatedKeys }
+            val targets = targetsFinder.findTargetsNeedingTranslation(project, file, untranslatedRules)
             if (targets.isEmpty()) null else Reminder(ReminderType.BASE, file, targets)
         } else {
-            val hasWork = analyzer.analyze(scopeBase, file, untranslatedRules).hasUntranslatedKeys
+            val hasWork = targetsFinder.needsTranslation(scopeBase, file, untranslatedRules)
             if (!hasWork) null else Reminder(ReminderType.TARGET, scopeBase, listOf(file))
         }
     }

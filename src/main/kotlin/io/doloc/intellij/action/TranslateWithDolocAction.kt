@@ -20,12 +20,12 @@ import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import io.doloc.intellij.api.DolocRequestBuilder
-import io.doloc.intellij.arb.ArbFileAnalyzer
 import io.doloc.intellij.arb.ArbPairResolver
 import io.doloc.intellij.arb.ArbProjectOverridesService
 import io.doloc.intellij.arb.ArbResolutionDialog
 import io.doloc.intellij.arb.ArbSelectionPlanner
 import io.doloc.intellij.arb.ArbTranslationJob
+import io.doloc.intellij.arb.ArbTranslationTargetsFinder
 import io.doloc.intellij.http.HttpClientProvider
 import io.doloc.intellij.service.DolocSettingsService
 import io.doloc.intellij.settings.DolocConfigurable
@@ -43,7 +43,7 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
     private val notificationGroup =
         NotificationGroupManager.getInstance().getNotificationGroup("Doloc Translation")
     private val arbPairResolver = ArbPairResolver()
-    private val arbAnalyzer = ArbFileAnalyzer()
+    private val arbTargetsFinder = ArbTranslationTargetsFinder(arbPairResolver)
 
     override fun update(e: AnActionEvent) {
         val project = e.project
@@ -192,10 +192,11 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
 
         FileDocumentManager.getInstance().saveAllDocuments()
 
-        val filteredTargets = arbPairResolver.inferTargetFiles(project, baseFile)
-            .filter { target ->
-                arbAnalyzer.analyze(baseFile, target, DolocSettingsState.getInstance().arbUntranslatedStates).hasUntranslatedKeys
-            }
+        val filteredTargets = arbTargetsFinder.findTargetsNeedingTranslation(
+            project,
+            baseFile,
+            DolocSettingsState.getInstance().arbUntranslatedStates
+        )
 
         if (filteredTargets.isEmpty()) {
             Messages.showInfoMessage(
