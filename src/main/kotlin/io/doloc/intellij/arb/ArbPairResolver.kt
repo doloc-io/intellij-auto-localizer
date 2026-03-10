@@ -8,6 +8,12 @@ class ArbPairResolver(
 ) {
     private val analyzer = ArbFileAnalyzer()
 
+    private data class BaseResolution(
+        val candidates: List<VirtualFile>,
+        val baseFile: VirtualFile?,
+        val origin: BaseResolutionOrigin
+    )
+
     enum class BaseResolutionOrigin {
         SAVED_OVERRIDE,
         L10N_CONFIG,
@@ -71,44 +77,21 @@ class ArbPairResolver(
         val overrides = ArbProjectOverridesService.getInstance(project)
         val scope = resolveScope(project, targetFile)
 
-        val savedBase = overrides.resolveBaseFile(scope.savedOverride)
-        val l10nBase = scope.l10nConfig?.arbDir?.findChild(scope.l10nConfig.templateArbFile)
-        val heuristicCandidates = if (savedBase == null && l10nBase == null) {
-            ArbHeuristics.findBaseCandidates(
-                targetFile,
-                ArbHeuristics.ScopeContext(scope.scopeDir, scope.searchRoot, scope.l10nConfig)
-            )
-        } else {
-            emptyList()
-        }
+        val baseResolution = resolveBase(scope, targetFile, overrides)
 
-        val baseCandidates = when {
-            savedBase != null -> listOf(savedBase)
-            l10nBase != null -> listOf(l10nBase)
-            else -> heuristicCandidates
-        }.distinctBy { it.path }
-
-        val baseFile = baseCandidates.singleOrNull()
-        val baseOrigin = when {
-            savedBase != null -> BaseResolutionOrigin.SAVED_OVERRIDE
-            l10nBase != null -> BaseResolutionOrigin.L10N_CONFIG
-            baseFile != null -> BaseResolutionOrigin.HEURISTIC
-            else -> BaseResolutionOrigin.NONE
-        }
-
-        val sourceLang = baseFile?.let { resolveSourceLang(scope, it) }
+        val sourceLang = baseResolution.baseFile?.let { resolveSourceLang(scope, it) }
             ?: scope.savedOverride?.sourceLang?.takeIf { it.isNotBlank() }
         val targetLang = resolveTargetLang(overrides, scope, targetFile)
 
         return ArbTargetResolution(
             scope = scope,
             targetFile = targetFile,
-            baseCandidates = baseCandidates,
-            baseFile = baseFile,
-            baseOrigin = baseOrigin,
+            baseCandidates = baseResolution.candidates,
+            baseFile = baseResolution.baseFile,
+            baseOrigin = baseResolution.origin,
             sourceLang = sourceLang,
             targetLang = targetLang,
-            needsBasePrompt = baseFile == null,
+            needsBasePrompt = baseResolution.baseFile == null,
             needsSourceLangPrompt = sourceLang.isNullOrBlank(),
             needsTargetLangPrompt = targetLang.isNullOrBlank()
         )
@@ -117,12 +100,7 @@ class ArbPairResolver(
     fun resolveScopeBase(project: Project, file: VirtualFile): VirtualFile? {
         val scope = resolveScope(project, file)
         val overrides = ArbProjectOverridesService.getInstance(project)
-        return overrides.resolveBaseFile(scope.savedOverride)
-            ?: scope.l10nConfig?.arbDir?.findChild(scope.l10nConfig.templateArbFile)
-            ?: ArbHeuristics.findBaseCandidates(
-                file,
-                ArbHeuristics.ScopeContext(scope.scopeDir, scope.searchRoot, scope.l10nConfig)
-            ).singleOrNull()
+        return resolveBase(scope, file, overrides).baseFile
             ?: file.takeIf { ArbHeuristics.isLikelyBaseFile(it, scope.searchRoot) }
     }
 
@@ -144,6 +122,53 @@ class ArbPairResolver(
             .distinctBy { it.path }
             .sortedBy { it.path }
             .toList()
+    }
+
+    private fun resolveBase(
+        scope: ArbResolutionScope,
+        targetFile: VirtualFile,
+        overrides: ArbProjectOverridesService
+    ): BaseResolution {
+        return resolveConfiguredBase(scope, overrides)
+            ?: resolveHeuristicBase(scope, targetFile)
+    }
+
+    private fun resolveConfiguredBase(
+        scope: ArbResolutionScope,
+        overrides: ArbProjectOverridesService
+    ): BaseResolution? {
+        val savedBase = overrides.resolveBaseFile(scope.savedOverride)
+        if (savedBase != null) {
+            return BaseResolution(
+                candidates = listOf(savedBase),
+                baseFile = savedBase,
+                origin = BaseResolutionOrigin.SAVED_OVERRIDE
+            )
+        }
+
+        val l10nBase = scope.l10nConfig?.arbDir?.findChild(scope.l10nConfig.templateArbFile)
+        if (l10nBase != null) {
+            return BaseResolution(
+                candidates = listOf(l10nBase),
+                baseFile = l10nBase,
+                origin = BaseResolutionOrigin.L10N_CONFIG
+            )
+        }
+
+        return null
+    }
+
+    private fun resolveHeuristicBase(scope: ArbResolutionScope, targetFile: VirtualFile): BaseResolution {
+        val candidates = ArbHeuristics.findBaseCandidates(
+            targetFile,
+            ArbHeuristics.ScopeContext(scope.scopeDir, scope.searchRoot, scope.l10nConfig)
+        ).distinctBy { it.path }
+        val baseFile = candidates.singleOrNull()
+        return BaseResolution(
+            candidates = candidates,
+            baseFile = baseFile,
+            origin = if (baseFile != null) BaseResolutionOrigin.HEURISTIC else BaseResolutionOrigin.NONE
+        )
     }
 
     private fun resolveSourceLang(scope: ArbResolutionScope, baseFile: VirtualFile): String? {
