@@ -27,7 +27,13 @@ class ArbFileAnalyzer(
     }
 
     fun parse(file: VirtualFile): ArbDocument {
-        return parse(VfsUtil.loadText(file))
+        return try {
+            parse(VfsUtil.loadText(file))
+        } catch (e: ArbParseException) {
+            throw e
+        } catch (e: Exception) {
+            throw ArbParseException(file.name, e)
+        }
     }
 
     fun parse(content: String): ArbDocument {

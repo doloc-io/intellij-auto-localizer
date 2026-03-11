@@ -12,7 +12,10 @@ class ArbTranslationWorkflow(
     private val ensureApiToken: (Project) -> Boolean,
     private val confirmOverwriteTargets: (Project, List<VirtualFile>) -> Boolean,
     private val confirmFanOut: (Project, VirtualFile, List<VirtualFile>) -> Boolean,
-    private val executeJobs: (Project, List<ArbTranslationJob>, String) -> Unit
+    private val executeJobs: (Project, List<ArbTranslationJob>, String) -> Unit,
+    private val showParseError: (Project, String, String) -> Unit = { project, message, title ->
+        Messages.showErrorDialog(project, message, title)
+    }
 ) {
     fun performTranslation(project: Project, files: List<VirtualFile>) {
         if (!ensureApiToken(project)) return
@@ -20,8 +23,13 @@ class ArbTranslationWorkflow(
         FileDocumentManager.getInstance().saveAllDocuments()
 
         val planner = ArbSelectionPlanner(pairResolver)
-        val plan = planner.planExplicitSelection(project, files)
-        val jobs = resolvePlan(project, planner, plan) ?: return
+        val jobs = try {
+            val plan = planner.planExplicitSelection(project, files)
+            resolvePlan(project, planner, plan)
+        } catch (e: ArbParseException) {
+            handleParseFailure(project, e)
+            return
+        } ?: return
         if (jobs.isEmpty()) return
 
         if (!confirmOverwriteTargets(project, jobs.map { it.targetFile })) {
@@ -36,11 +44,16 @@ class ArbTranslationWorkflow(
 
         FileDocumentManager.getInstance().saveAllDocuments()
 
-        val filteredTargets = targetsFinder.findTargetsNeedingTranslation(
-            project,
-            baseFile,
-            DolocSettingsState.getInstance().arbUntranslatedStates
-        )
+        val filteredTargets = try {
+            targetsFinder.findTargetsNeedingTranslation(
+                project,
+                baseFile,
+                DolocSettingsState.getInstance().arbUntranslatedStates
+            )
+        } catch (e: ArbParseException) {
+            handleParseFailure(project, e)
+            return
+        }
 
         if (filteredTargets.isEmpty()) {
             Messages.showInfoMessage(
@@ -52,8 +65,13 @@ class ArbTranslationWorkflow(
         }
 
         val planner = ArbSelectionPlanner(pairResolver)
-        val plan = planner.planBaseSelection(project, baseFile, filteredTargets)
-        val jobs = resolvePlan(project, planner, plan) ?: return
+        val jobs = try {
+            val plan = planner.planBaseSelection(project, baseFile, filteredTargets)
+            resolvePlan(project, planner, plan)
+        } catch (e: ArbParseException) {
+            handleParseFailure(project, e)
+            return
+        } ?: return
         if (jobs.isEmpty()) return
 
         if (!confirmFanOut(project, baseFile, filteredTargets)) {
@@ -130,5 +148,9 @@ class ArbTranslationWorkflow(
                 overrides.saveTargetLanguage(job.scopeDir, job.targetFile, job.targetLang)
             }
         }
+    }
+
+    private fun handleParseFailure(project: Project, exception: ArbParseException) {
+        showParseError(project, exception.toUserMessage(), "ARB Translation")
     }
 }

@@ -13,6 +13,7 @@ import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import io.doloc.intellij.action.TranslateWithDolocAction
 import io.doloc.intellij.arb.ArbReminderInspector
+import io.doloc.intellij.arb.ArbParseException
 import io.doloc.intellij.filetype.XliffFileType
 import io.doloc.intellij.settings.DolocSettingsState
 import io.doloc.intellij.util.logger
@@ -80,6 +81,8 @@ class DolocFileListener : BulkFileListener {
             ApplicationManager.getApplication().invokeLater {
                 showXliffNotification(project, file)
             }
+        } catch (_: ArbParseException) {
+            return
         } catch (e: Exception) {
             log.warn("Error checking file for untranslated units: ${e.message}")
         }

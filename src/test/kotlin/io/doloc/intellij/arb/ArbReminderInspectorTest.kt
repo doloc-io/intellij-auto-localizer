@@ -9,7 +9,7 @@ import kotlin.io.path.writeText
 import kotlin.test.assertEquals
 
 class ArbReminderInspectorTest : BasePlatformTestCase() {
-    private val inspector = ArbReminderInspector()
+    private val inspector = ArbReminderInspector(ArbPairResolver(), ArbTranslationTargetsFinder())
     private lateinit var tempDir: Path
 
     override fun setUp() {
