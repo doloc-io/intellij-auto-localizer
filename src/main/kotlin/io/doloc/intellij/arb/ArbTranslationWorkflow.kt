@@ -39,7 +39,7 @@ class ArbTranslationWorkflow(
         executeJobs(project, jobs, "Translating ARB files")
     }
 
-    fun performBaseTranslation(project: Project, baseFile: VirtualFile) {
+    fun performBaseTranslation(project: Project, baseFile: VirtualFile, skipFanOutConfirmation: Boolean = false) {
         if (!ensureApiToken(project)) return
 
         FileDocumentManager.getInstance().saveAllDocuments()
@@ -67,14 +67,14 @@ class ArbTranslationWorkflow(
         val planner = ArbSelectionPlanner(pairResolver)
         val jobs = try {
             val plan = planner.planBaseSelection(project, baseFile, filteredTargets)
-            resolvePlan(project, planner, plan)
+            resolvePlan(project, planner, plan, skipFanOutConfirmation)
         } catch (e: ArbParseException) {
             handleParseFailure(project, e)
             return
         } ?: return
         if (jobs.isEmpty()) return
 
-        if (!confirmFanOut(project, baseFile, filteredTargets)) {
+        if (!skipFanOutConfirmation && !confirmFanOut(project, baseFile, filteredTargets)) {
             return
         }
 
@@ -88,7 +88,8 @@ class ArbTranslationWorkflow(
     private fun resolvePlan(
         project: Project,
         planner: ArbSelectionPlanner,
-        plan: ArbSelectionPlanner.PlanResult
+        plan: ArbSelectionPlanner.PlanResult,
+        skipFanOutConfirmation: Boolean = false
     ): List<ArbTranslationJob>? {
         val confirmationTargets = when (plan) {
             is ArbSelectionPlanner.PlanResult.Ready -> plan.confirmationTargets
@@ -119,7 +120,11 @@ class ArbTranslationWorkflow(
                                 result.sourceLang
                             )
                         }
-                        performBaseTranslation(project, promptResolution.selectedBaseFile)
+                        performBaseTranslation(
+                            project,
+                            promptResolution.selectedBaseFile,
+                            skipFanOutConfirmation = skipFanOutConfirmation
+                        )
                         return null
                     }
                     persistPromptOverrides(project, plan.scopeDir, result, promptResolution.jobs)

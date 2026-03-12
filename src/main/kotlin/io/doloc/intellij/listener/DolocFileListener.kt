@@ -119,7 +119,7 @@ class DolocFileListener : BulkFileListener {
             )
 
             ArbReminderInspector.ReminderType.BASE -> notificationGroup.createNotification(
-                "Base ARB changed",
+                "Base ARB changed: ${triggeringFile.name}",
                 buildBaseHintContent(reminder.targetFiles),
                 NotificationType.INFORMATION
             )
@@ -138,7 +138,11 @@ class DolocFileListener : BulkFileListener {
             ArbReminderInspector.ReminderType.BASE -> {
                 notification.addAction(object : AnAction("Translate to all target files") {
                     override fun actionPerformed(e: AnActionEvent) {
-                        TranslateWithDolocAction().performArbBaseTranslation(project, triggeringFile)
+                        TranslateWithDolocAction().performArbBaseTranslation(
+                            project,
+                            triggeringFile,
+                            skipFanOutConfirmation = true
+                        )
                         notification.expire()
                     }
                 })

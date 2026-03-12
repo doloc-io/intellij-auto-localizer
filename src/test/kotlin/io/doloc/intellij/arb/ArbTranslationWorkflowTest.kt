@@ -86,6 +86,34 @@ class ArbTranslationWorkflowTest : BasePlatformTestCase() {
         assertTrue(parseErrors.single().contains("app_de.arb"))
     }
 
+    fun testBaseTranslationSkipsFanOutConfirmationWhenRequested() {
+        val scope = tempDir.resolve("feature").createDirectories()
+        val base = createFile(scope.resolve("app_en.arb"), """{"@@locale":"en","hello":"Hello"}""")
+        createFile(scope.resolve("app_de.arb"), """{"@@locale":"de"}""")
+
+        var fanOutConfirmed = false
+        var overwriteConfirmed = false
+        var jobsExecuted = false
+
+        val workflow = createWorkflow(
+            onConfirmOverwrite = {
+                overwriteConfirmed = true
+                true
+            },
+            onConfirmFanOut = {
+                fanOutConfirmed = true
+                true
+            },
+            onExecuteJobs = { jobsExecuted = true }
+        )
+
+        workflow.performBaseTranslation(project, base, skipFanOutConfirmation = true)
+
+        assertFalse(fanOutConfirmed)
+        assertTrue(overwriteConfirmed)
+        assertTrue(jobsExecuted)
+    }
+
     private fun createWorkflow(
         onConfirmOverwrite: () -> Boolean = { true },
         onConfirmFanOut: () -> Boolean = { true },

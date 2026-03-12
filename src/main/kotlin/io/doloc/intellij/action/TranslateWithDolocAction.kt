@@ -180,8 +180,12 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         arbWorkflow.performTranslation(project, files)
     }
 
-    fun performArbBaseTranslation(project: Project, baseFile: VirtualFile) {
-        arbWorkflow.performBaseTranslation(project, baseFile)
+    fun performArbBaseTranslation(
+        project: Project,
+        baseFile: VirtualFile,
+        skipFanOutConfirmation: Boolean = false
+    ) {
+        arbWorkflow.performBaseTranslation(project, baseFile, skipFanOutConfirmation)
     }
 
     private fun executeArbJobs(project: Project, jobs: List<ArbTranslationJob>, taskTitle: String) {
