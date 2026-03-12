@@ -128,6 +128,14 @@ class ArbProjectOverridesService(
     }
 
     fun resolveStoredFile(storedPath: String): VirtualFile? {
+        return resolveStoredPath(storedPath)?.takeIf { !it.isDirectory }
+    }
+
+    fun resolveStoredDirectory(storedPath: String): VirtualFile? {
+        return resolveStoredPath(storedPath)?.takeIf { it.isDirectory }
+    }
+
+    fun resolveStoredPath(storedPath: String): VirtualFile? {
         val normalizedPath = FileUtil.toSystemIndependentName(storedPath)
         val absolutePath = if (File(normalizedPath).isAbsolute) {
             normalizedPath

@@ -52,6 +52,7 @@ class ArbProjectOverridesConfigurable(
     private lateinit var sourceLangValue: JLabel
     private lateinit var targetSummaryValue: JLabel
     private lateinit var statusValue: JLabel
+    private lateinit var addScopeButton: JButton
     private lateinit var addTargetButton: JButton
     private lateinit var editTargetButton: JButton
     private lateinit var removeTargetButton: JButton
@@ -123,9 +124,9 @@ class ArbProjectOverridesConfigurable(
     private fun createIntroPanel(): JComponent {
         return JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            add(JBLabel("Saved overrides from remembered ARB resolutions."))
+            add(JBLabel("Saved overrides from remembered or manually added ARB scopes."))
             add(Box.createVerticalStrut(JBUI.scale(2)))
-            add(JBLabel("Scopes are created automatically when you choose to remember them during ARB translation."))
+            add(JBLabel("Use Add Scope for a new scope, then Add Target Override on the right for that scope's targets."))
         }
     }
 
@@ -143,6 +144,15 @@ class ArbProjectOverridesConfigurable(
 
         panel.add(JBLabel("Scopes"), BorderLayout.NORTH)
         panel.add(JBScrollPane(scopeList), BorderLayout.CENTER)
+        addScopeButton = JButton("Add Scope").apply {
+            addActionListener { addScope() }
+        }
+        panel.add(
+            JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+                add(addScopeButton)
+            },
+            BorderLayout.SOUTH
+        )
 
         return panel
     }
@@ -214,7 +224,7 @@ class ArbProjectOverridesConfigurable(
         }
 
         val targetButtonPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0))
-        addTargetButton = JButton("Add").apply {
+        addTargetButton = JButton("Add Target Override").apply {
             addActionListener { addTargetOverride() }
         }
         editTargetButton = JButton("Edit").apply {
@@ -274,7 +284,7 @@ class ArbProjectOverridesConfigurable(
 
         if (scope == null) {
             val message = if (workingScopes.isEmpty()) {
-                "No saved ARB overrides yet. They appear here after you remember a translation scope."
+                "No saved ARB override scopes yet. Add one manually or remember a scope during ARB translation."
             } else {
                 "Select a saved scope to inspect or edit its ARB overrides."
             }
@@ -299,10 +309,34 @@ class ArbProjectOverridesConfigurable(
     }
 
     private fun updateActionState() {
+        addScopeButton.isEnabled = true
         val hasScope = selectedScope() != null
         addTargetButton.isEnabled = hasScope
         editTargetButton.isEnabled = hasScope && targetList.selectedValue != null
         removeTargetButton.isEnabled = hasScope && targetList.selectedValue != null
+    }
+
+    private fun addScope() {
+        val dialog = ArbScopeDefaultsDialog(
+            project,
+            service,
+            null,
+            workingScopes.map { it.scopeDir }.toSet()
+        )
+        if (!dialog.showAndGet()) {
+            return
+        }
+
+        val result = dialog.result ?: return
+        workingScopes.add(
+            ArbProjectOverridesService.ArbScopeOverride(
+                scopeDir = result.scopeDir,
+                baseFile = result.baseFile,
+                sourceLang = result.sourceLang
+            )
+        )
+        refreshScopeList(result.scopeDir)
+        updateDetailPanel()
     }
 
     private fun editSelectedScope() {

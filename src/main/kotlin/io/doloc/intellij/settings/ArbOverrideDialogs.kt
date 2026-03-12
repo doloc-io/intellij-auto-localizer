@@ -17,30 +17,35 @@ import java.awt.GridBagLayout
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.JTextArea
 import javax.swing.JTextField
 
 class ArbScopeDefaultsDialog(
     private val project: Project,
     private val service: ArbProjectOverridesService,
-    private val scope: ArbProjectOverridesService.ArbScopeOverride
+    private val scope: ArbProjectOverridesService.ArbScopeOverride?,
+    private val existingScopeDirs: Set<String> = emptySet()
 ) : DialogWrapper(project) {
     data class Result(
+        val scopeDir: String,
         val baseFile: String,
         val sourceLang: String
     )
 
+    private val isNewScope = scope == null
+    private val scopeDirField = createScopeDirectoryField(project, service, "Select Scope Directory")
     private val baseFileField = createArbFileField(project, service, "Select Base ARB File")
-    private val sourceLangField = JTextField(scope.sourceLang, 16)
+    private val sourceLangField = JTextField(scope?.sourceLang.orEmpty(), 16)
 
     init {
-        title = "Edit ARB Scope Defaults"
-        baseFileField.text = scope.baseFile
+        title = if (isNewScope) "Add ARB Override Scope" else "Edit ARB Scope Defaults"
+        baseFileField.text = scope?.baseFile.orEmpty()
         init()
     }
 
     override fun createCenterPanel(): JComponent {
         val panel = JPanel(BorderLayout(0, JBUI.scale(10)))
-        panel.preferredSize = JBUI.size(520, 180)
+        panel.preferredSize = JBUI.size(680, 260)
 
         val content = JPanel(GridBagLayout())
         val gbc = GridBagConstraints().apply {
@@ -52,10 +57,17 @@ class ArbScopeDefaultsDialog(
             insets = JBUI.insetsBottom(8)
         }
 
-        content.add(JBLabel("Scope"), gbc)
-        gbc.gridy++
-        content.add(JBLabel(scope.scopeDir.ifBlank { "<project root>" }), gbc)
-        gbc.gridy++
+        if (isNewScope) {
+            content.add(JBLabel("Scope directory"), gbc)
+            gbc.gridy++
+            content.add(scopeDirField, gbc)
+            gbc.gridy++
+        } else {
+            content.add(JBLabel("Scope"), gbc)
+            gbc.gridy++
+            content.add(createWrappingText(scope!!.scopeDir.ifBlank { PROJECT_ROOT_DISPLAY }), gbc)
+            gbc.gridy++
+        }
         content.add(JBLabel("Base file"), gbc)
         gbc.gridy++
         content.add(baseFileField, gbc)
@@ -68,7 +80,7 @@ class ArbScopeDefaultsDialog(
         panel.add(
             JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
-                add(JBLabel("Leave both fields empty to clear the saved base file and source language."))
+                add(createWrappingText(dialogHintText()))
             },
             BorderLayout.SOUTH
         )
@@ -77,9 +89,21 @@ class ArbScopeDefaultsDialog(
     }
 
     override fun doValidateAll(): List<ValidationInfo> {
+        val errors = mutableListOf<ValidationInfo>()
+        if (isNewScope) {
+            val scopeDirText = scopeDirField.text.trim()
+            val resolvedScopeDir = resolveScopeDirectory(service, scopeDirText)
+            when {
+                scopeDirText.isBlank() -> errors += ValidationInfo("Choose a scope directory.", scopeDirField)
+                resolvedScopeDir == null -> errors += ValidationInfo("Choose an existing directory.", scopeDirField)
+                service.toStoredPath(resolvedScopeDir.path) in existingScopeDirs -> {
+                    errors += ValidationInfo("A scope override for this directory already exists.", scopeDirField)
+                }
+            }
+        }
+
         val baseFile = baseFileField.text.trim()
         val sourceLang = sourceLangField.text.trim()
-        val errors = mutableListOf<ValidationInfo>()
 
         val hasBaseFile = baseFile.isNotBlank()
         val hasSourceLang = sourceLang.isNotBlank()
@@ -105,15 +129,41 @@ class ArbScopeDefaultsDialog(
 
     val result: Result?
         get() {
+            val scopeDir = if (isNewScope) {
+                val resolvedScopeDir = resolveScopeDirectory(service, scopeDirField.text) ?: return null
+                service.toStoredPath(resolvedScopeDir.path)
+            } else {
+                scope?.scopeDir.orEmpty()
+            }
             val baseFile = baseFileField.text.trim()
             val sourceLang = sourceLangField.text.trim()
             val resolvedBaseFile = service.resolveStoredFile(baseFile)
             return Result(
+                scopeDir = scopeDir,
                 baseFile = resolvedBaseFile?.let { service.toStoredPath(it.path) }.orEmpty(),
                 sourceLang = ArbLocaleHelper.normalizeLocale(sourceLang).orEmpty()
             )
         }
 
+    private fun dialogHintText(): String {
+        return if (isNewScope) {
+            "Create the scope here first. Add target overrides later from the selected scope details. Leave base file and source language empty if you only want to add the scope now."
+        } else {
+            "Leave both fields empty to clear the saved base file and source language."
+        }
+    }
+
+}
+
+private fun createWrappingText(text: String): JTextArea {
+    return JTextArea(text).apply {
+        lineWrap = true
+        wrapStyleWord = true
+        isEditable = false
+        isFocusable = false
+        isOpaque = false
+        border = JBUI.Borders.empty()
+    }
 }
 
 class ArbTargetOverrideDialog(
@@ -214,8 +264,31 @@ private fun createArbFileField(
     }
 }
 
+private fun createScopeDirectoryField(
+    project: Project,
+    service: ArbProjectOverridesService,
+    dialogTitle: String
+): TextFieldWithBrowseButton {
+    return TextFieldWithBrowseButton().apply {
+        addActionListener {
+            val selectedDirectory = FileChooser.chooseFile(
+                scopeDirectoryDescriptor(dialogTitle),
+                project,
+                currentScopeDirectorySelection(service, text)
+            )
+            if (selectedDirectory != null) {
+                text = displayScopeDir(service.toStoredPath(selectedDirectory.path))
+            }
+        }
+    }
+}
+
 private fun currentSelection(service: ArbProjectOverridesService, path: String): VirtualFile? {
     return service.resolveStoredFile(path.trim())
+}
+
+private fun currentScopeDirectorySelection(service: ArbProjectOverridesService, path: String): VirtualFile? {
+    return resolveScopeDirectory(service, path)
 }
 
 private fun arbFileDescriptor(title: String): FileChooserDescriptor {
@@ -224,3 +297,25 @@ private fun arbFileDescriptor(title: String): FileChooserDescriptor {
         withFileFilter { it.isDirectory || it.name.endsWith(".arb", ignoreCase = true) }
     }
 }
+
+private fun scopeDirectoryDescriptor(title: String): FileChooserDescriptor {
+    return FileChooserDescriptor(false, true, false, false, false, false).apply {
+        this.title = title
+    }
+}
+
+private fun resolveScopeDirectory(service: ArbProjectOverridesService, path: String): VirtualFile? {
+    val storedPath = normalizeScopeDirInput(path)
+    return service.resolveStoredDirectory(storedPath)
+}
+
+private fun normalizeScopeDirInput(path: String): String {
+    val trimmedPath = path.trim()
+    return if (trimmedPath == PROJECT_ROOT_DISPLAY) "" else trimmedPath
+}
+
+private fun displayScopeDir(storedPath: String): String {
+    return storedPath.ifBlank { PROJECT_ROOT_DISPLAY }
+}
+
+private const val PROJECT_ROOT_DISPLAY = "<project root>"
