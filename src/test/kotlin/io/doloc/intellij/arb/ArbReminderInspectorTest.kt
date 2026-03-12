@@ -7,6 +7,7 @@ import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class ArbReminderInspectorTest : BasePlatformTestCase() {
     private val inspector = ArbReminderInspector(ArbPairResolver(), ArbTranslationTargetsFinder())
@@ -48,10 +49,28 @@ class ArbReminderInspectorTest : BasePlatformTestCase() {
         assertEquals(2, reminder.targetFiles.size)
     }
 
+    fun testOverriddenBaseReminderIncludesDefaultTemplate() {
+        val scope = tempDir.resolve("feature").createDirectories()
+        val defaultTemplate = createFile(scope.resolve("app_en.arb"), """{"@@locale":"en","hello":"Hello"}""")
+        val overriddenBase = createFile(scope.resolve("app_de.arb"), """{"@@locale":"de","hello":"Hallo","bye":"Tschuess"}""")
+        val otherTarget = createFile(scope.resolve("app_fr.arb"), """{"@@locale":"fr","hello":"Bonjour"}""")
+        ArbProjectOverridesService.getInstance(project).saveScopeOverride(scope.toVirtualFile(), overriddenBase, "de")
+
+        val reminder = inspector.inspect(project, overriddenBase, setOf("missing")) ?: error("Expected base reminder")
+
+        assertEquals(ArbReminderInspector.ReminderType.BASE, reminder.type)
+        assertEquals(2, reminder.targetFiles.size)
+        assertTrue(defaultTemplate.path in reminder.targetFiles.map { it.path })
+        assertTrue(otherTarget.path in reminder.targetFiles.map { it.path })
+    }
+
     private fun createFile(path: Path, content: String): com.intellij.openapi.vfs.VirtualFile {
         path.parent?.createDirectories()
         path.writeText(content)
         return LocalFileSystem.getInstance().refreshAndFindFileByIoFile(path.toFile())
             ?: error("Missing virtual file for $path")
     }
+
+    private fun Path.toVirtualFile() = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(this.toFile())
+        ?: error("Missing virtual file for $this")
 }

@@ -100,6 +100,20 @@ class ArbPairResolverTest : BasePlatformTestCase() {
         assertTrue(secondarySource.path !in inferredTargets.map { it.path })
     }
 
+    fun testOverriddenBaseIncludesDefaultTemplateAsTarget() {
+        val scope = tempDir.resolve("feature").createDirectories()
+        val defaultBase = createFile(scope.resolve("app_en.arb"), """{"@@locale":"en","hello":"Hello"}""")
+        val overriddenBase = createFile(scope.resolve("app_de.arb"), """{"@@locale":"de","hello":"Hallo"}""")
+        val otherTarget = createFile(scope.resolve("app_fr.arb"), """{"@@locale":"fr","hello":"Bonjour"}""")
+
+        ArbProjectOverridesService.getInstance(project).saveScopeOverride(scope.toVirtualFile(), overriddenBase, "de")
+
+        val inferredTargets = resolver.inferTargetFiles(project, overriddenBase)
+
+        assertTrue(defaultBase.path in inferredTargets.map { it.path })
+        assertTrue(otherTarget.path in inferredTargets.map { it.path })
+    }
+
     private fun createFile(path: Path, content: String): com.intellij.openapi.vfs.VirtualFile {
         path.parent?.createDirectories()
         path.writeText(content)

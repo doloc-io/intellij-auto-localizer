@@ -114,14 +114,21 @@ class ArbPairResolver(
         return ArbHeuristics.collectArbFiles(scope.searchRoot)
             .asSequence()
             .filter { it.path != baseFile.path }
-            .filterNot { ArbHeuristics.hasPreferredSourceLocale(it) }
-            .filter { candidate ->
-                resolveScopeBase(project, candidate)?.path == baseFile.path ||
-                    ArbHeuristics.matchesExplicitBase(baseFile, candidate)
-            }
+            .filter { candidate -> isInferredTarget(project, baseFile, candidate) }
             .distinctBy { it.path }
             .sortedBy { it.path }
             .toList()
+    }
+
+    private fun isInferredTarget(project: Project, baseFile: VirtualFile, candidate: VirtualFile): Boolean {
+        val resolution = resolveTarget(project, candidate)
+        val resolvesToBase = resolution.baseFile?.path == baseFile.path
+        if (resolvesToBase) {
+            return resolution.baseOrigin != BaseResolutionOrigin.HEURISTIC || !ArbHeuristics.hasPreferredSourceLocale(candidate)
+        }
+
+        return !ArbHeuristics.hasPreferredSourceLocale(candidate) &&
+            ArbHeuristics.matchesExplicitBase(baseFile, candidate)
     }
 
     private fun resolveBase(
