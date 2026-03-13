@@ -20,13 +20,12 @@ object DolocRequestBuilder {
      * @return HttpRequest configured for translation
      * @throws IllegalStateException if no API token is available
      */
-    fun createTranslationRequest(
+    internal fun createTranslationRequest(
         filePath: VirtualFile,
+        token: String,
         untranslatedStates: Set<String>? = null,
         newState: String? = null
     ): HttpRequest {
-        val token = DolocSettingsService.getInstance().getApiToken()
-            ?: throw IllegalStateException("No API token available")
 
         val queryString = DolocQueryBuilder.buildTranslateQueryString(
             untranslated = untranslatedStates,
@@ -50,6 +49,18 @@ object DolocRequestBuilder {
     ): HttpRequest {
         val token = DolocSettingsService.getInstance().getApiToken()
             ?: throw IllegalStateException("No API token available")
+
+        return createArbTranslationRequest(sourceFile, targetFile, token, untranslatedStates, sourceLang, targetLang)
+    }
+
+    internal fun createArbTranslationRequest(
+        sourceFile: VirtualFile,
+        targetFile: VirtualFile,
+        token: String,
+        untranslatedStates: Set<String>,
+        sourceLang: String?,
+        targetLang: String?
+    ): HttpRequest {
 
         val queryString = DolocQueryBuilder.buildArbTranslateQueryString(
             untranslated = untranslatedStates,

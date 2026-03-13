@@ -33,6 +33,7 @@ class DolocSettingsService {
     private var tokenStoreAvailable = true
     @Volatile
     private var tokenStoreWarningShown = false
+    private val anonymousTokenLock = Any()
     private var manualTokenFallback: String? = null
     private var anonymousTokenFallback: String? = null
 
@@ -60,12 +61,38 @@ class DolocSettingsService {
     }
 
     private fun getOrCreateAnonymousToken(): String? {
-        val stored = getStoredAnonymousToken()
-        if (!stored.isNullOrBlank()) return stored
+        synchronized(anonymousTokenLock) {
+            val stored = getStoredAnonymousToken()
+            if (!stored.isNullOrBlank()) {
+                return stored
+            }
 
+            return requestAnonymousToken { anonymousTokenManager.createToken() }
+        }
+    }
+
+    fun refreshAnonymousToken(failedToken: String? = null): String? {
+        synchronized(anonymousTokenLock) {
+            val currentToken = getStoredAnonymousToken()
+            if (
+                !failedToken.isNullOrBlank() &&
+                !currentToken.isNullOrBlank() &&
+                currentToken != failedToken
+            ) {
+                return currentToken
+            }
+
+            clearAnonymousToken()
+            return requestAnonymousToken { anonymousTokenManager.createToken() }
+        }
+    }
+
+    private fun requestAnonymousToken(request: suspend () -> String): String? {
         return runBlocking {
             try {
-                anonymousTokenManager.getOrCreateToken()
+                request()
+            } catch (e: ProcessCanceledException) {
+                throw e
             } catch (e: Exception) {
                 logger.warn("Failed to get anonymous token", e)
                 null

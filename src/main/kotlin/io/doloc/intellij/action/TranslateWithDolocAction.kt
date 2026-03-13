@@ -34,6 +34,7 @@ import io.doloc.intellij.util.utmUrl
 import io.doloc.intellij.xliff.LightweightXliffScanner
 import io.doloc.intellij.xliff.TargetLanguageAttribute
 import io.doloc.intellij.xliff.TargetLanguageHelper
+import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 
 class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
@@ -49,6 +50,11 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         confirmOverwriteTargets = ::confirmOverwriteTargets,
         confirmFanOut = ::confirmArbFanOut,
         executeJobs = ::executeArbJobs
+    )
+
+    private data class RequestAuth(
+        val token: String,
+        val usesAnonymousToken: Boolean
     )
 
     override fun update(e: AnActionEvent) {
@@ -134,16 +140,14 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
                         settings.xliff12NewState
                     }
 
-                    val request = DolocRequestBuilder.createTranslationRequest(
-                        file,
-                        untranslatedStates = untranslatedStates,
-                        newState = newState
-                    )
-
-                    val response = HttpClientProvider.client.send(
-                        request,
-                        HttpResponse.BodyHandlers.ofByteArray()
-                    )
+                    val response = sendTranslationRequest {
+                        DolocRequestBuilder.createTranslationRequest(
+                            filePath = file,
+                            token = it,
+                            untranslatedStates = untranslatedStates,
+                            newState = newState
+                        )
+                    }
 
                     if (response.statusCode() == 200) {
                         val responseText = String(response.body())
@@ -200,18 +204,16 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
                     indicator.fraction = (index.toDouble() / jobs.size.toDouble()).coerceIn(0.0, 1.0)
 
                     try {
-                        val request = DolocRequestBuilder.createArbTranslationRequest(
-                            sourceFile = job.baseFile,
-                            targetFile = job.targetFile,
-                            untranslatedStates = settings.arbUntranslatedStates,
-                            sourceLang = job.sourceLang,
-                            targetLang = job.targetLang
-                        )
-
-                        val response = HttpClientProvider.client.send(
-                            request,
-                            HttpResponse.BodyHandlers.ofByteArray()
-                        )
+                        val response = sendTranslationRequest {
+                            DolocRequestBuilder.createArbTranslationRequest(
+                                sourceFile = job.baseFile,
+                                targetFile = job.targetFile,
+                                token = it,
+                                untranslatedStates = settings.arbUntranslatedStates,
+                                sourceLang = job.sourceLang,
+                                targetLang = job.targetLang
+                            )
+                        }
 
                         if (response.statusCode() == 200) {
                             val responseText = String(response.body())
@@ -522,12 +524,57 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         throw IllegalStateException(message)
     }
 
-    private fun formatFailure(targetName: String, statusCode: Int, body: ByteArray): String {
-        val responseBody = try {
+    private fun sendTranslationRequest(buildRequest: (String) -> HttpRequest): HttpResponse<ByteArray> {
+        val auth = currentRequestAuth()
+        val response = HttpClientProvider.client.send(
+            buildRequest(auth.token),
+            HttpResponse.BodyHandlers.ofByteArray()
+        )
+
+        if (!shouldRetryWithFreshAnonymousToken(auth, response)) {
+            return response
+        }
+
+        val refreshedToken = DolocSettingsService.getInstance().refreshAnonymousToken(auth.token)
+        if (refreshedToken.isNullOrBlank()) {
+            return response
+        }
+
+        log.info("Retrying translation request with refreshed anonymous token")
+        return HttpClientProvider.client.send(
+            buildRequest(refreshedToken),
+            HttpResponse.BodyHandlers.ofByteArray()
+        )
+    }
+
+    private fun currentRequestAuth(): RequestAuth {
+        val usesAnonymousToken = DolocSettingsState.getInstance().useAnonymousToken
+        val token = DolocSettingsService.getInstance().getApiToken()
+            ?: throw IllegalStateException("No API token available")
+        return RequestAuth(token, usesAnonymousToken)
+    }
+
+    private fun shouldRetryWithFreshAnonymousToken(
+        auth: RequestAuth,
+        response: HttpResponse<ByteArray>
+    ): Boolean {
+        if (!auth.usesAnonymousToken || response.statusCode() != 401) {
+            return false
+        }
+
+        return getResponseBodyText(response.body()).contains("invalid api token", ignoreCase = true)
+    }
+
+    private fun getResponseBodyText(body: ByteArray): String {
+        return try {
             String(body).trim()
         } catch (_: Exception) {
             ""
         }
+    }
+
+    private fun formatFailure(targetName: String, statusCode: Int, body: ByteArray): String {
+        val responseBody = getResponseBodyText(body)
         return if (responseBody.isBlank()) {
             "$targetName: status $statusCode"
         } else {

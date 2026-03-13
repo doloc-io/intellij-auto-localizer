@@ -17,6 +17,7 @@ class DolocSettingsServiceFallbackTest {
     @Test
     fun testFallsBackToMemoryWhenTokenStoreIsUnavailable() {
         DolocSettingsService.tokenStoreFactory = { FailingTokenStore() }
+        DolocSettingsService.tokenStoreFailureNotifier = { }
 
         val service = DolocSettingsService()
         service.setApiToken("manual-token")

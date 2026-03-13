@@ -16,11 +16,7 @@ import okhttp3.mockwebserver.MockWebServer
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class TranslateWithDolocActionTest : BasePlatformTestCase() {
     private lateinit var mockWebServer: MockWebServer
@@ -82,7 +78,6 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
     }
 
     fun testTranslateAction() {
-        // Mock the response from the server
         val translatedContent = File(javaClass.classLoader.getResource("xliff/fully_translated.xlf")!!.file)
             .readText()
 
@@ -92,46 +87,15 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
                 .setBody(translatedContent)
         )
 
-        // Create action
-        val action = TranslateWithDolocAction()
+        executeAction()
 
-        // Create a data context with our test file
-        val dataContext = MapDataContext()
-        dataContext.put(CommonDataKeys.VIRTUAL_FILE_ARRAY, arrayOf(xliffFile))
-        dataContext.put(CommonDataKeys.PROJECT, project)
-
-        // Create action event
-        val event = AnActionEvent.createFromDataContext("test", null, dataContext)
-
-        // Execute the action (it runs in background, so we need to wait)
-        val latch = CountDownLatch(1)
-
-        ApplicationManager.getApplication().runWriteAction {
-            DolocRequestBuilder.setBaseUrl(mockWebServer.url("/").toString().removeSuffix("/"))
-            action.actionPerformed(event)
-            latch.countDown()
-        }
-
-        // Wait for action to complete
-        assertTrue("Action timed out", latch.await(5, TimeUnit.SECONDS))
-
-        ApplicationManager.getApplication().invokeAndWait {
-            xliffFile.refresh(false, false)
-        }
-
-        // Verify the request was made correctly
         val recordedRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
         assertNotNull("No request was recorded", recordedRequest)
         assertEquals("POST", recordedRequest?.method)
         assertTrue(recordedRequest?.path?.startsWith("/") ?: false)
         assertEquals("Bearer test-token", recordedRequest?.getHeader("Authorization"))
 
-        // Verify file was updated with translated content
-        val actualContent = VfsUtil.loadText(xliffFile)
-        assertTrue(
-            "File should contain translation state='translated'",
-            actualContent.contains("state=\"translated\"")
-        )
+        waitForTranslationResult()
     }
 
     fun testTranslateActionWithAnonymousToken() {
@@ -150,34 +114,111 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
                 .setBody(translatedContent)
         )
 
-        val action = TranslateWithDolocAction()
-
-        val dataContext = MapDataContext()
-        dataContext.put(CommonDataKeys.VIRTUAL_FILE_ARRAY, arrayOf(xliffFile))
-        dataContext.put(CommonDataKeys.PROJECT, project)
-
-        val event = AnActionEvent.createFromDataContext("test", null, dataContext)
-
-        val latch = CountDownLatch(1)
-        ApplicationManager.getApplication().runWriteAction {
-            DolocRequestBuilder.setBaseUrl(mockWebServer.url("/").toString().removeSuffix("/"))
-            action.actionPerformed(event)
-            latch.countDown()
-        }
-
-        assertTrue("Action timed out", latch.await(5, TimeUnit.SECONDS))
-
-        ApplicationManager.getApplication().invokeAndWait {
-            xliffFile.refresh(false, false)
-        }
+        executeAction()
 
         val recordedRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
         assertNotNull("No request was recorded", recordedRequest)
         assertEquals("POST", recordedRequest?.method)
         assertEquals("Bearer anon-token", recordedRequest?.getHeader("Authorization"))
 
-        val actualContent = VfsUtil.loadText(xliffFile)
-        assertTrue(actualContent.contains("state=\"translated\""))
+        waitForTranslationResult()
+    }
+
+    fun testTranslateActionRetriesOnceWithRefreshedAnonymousToken() {
+        val settingsService = DolocSettingsService.getInstance()
+        settingsService.clearApiToken()
+        settingsService.setAnonymousToken("anon-token")
+        DolocSettingsState.getInstance().useAnonymousToken = true
+
+        val translatedContent = File(
+            javaClass.classLoader.getResource("xliff/fully_translated.xlf")!!.file
+        ).readText()
+
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(401)
+                .setBody("Invalid API token for anonymous user")
+        )
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""{"token":"refreshed-anon-token","user_id":"1234-1234-1234-1234"}""")
+                .addHeader("Content-Type", "application/json")
+        )
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(translatedContent)
+        )
+
+        executeAction()
+
+        val firstRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull(firstRequest)
+        assertEquals("POST", firstRequest?.method)
+        assertEquals("Bearer anon-token", firstRequest?.getHeader("Authorization"))
+
+        val tokenRefreshRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull(tokenRefreshRequest)
+        assertEquals("PUT", tokenRefreshRequest?.method)
+        assertEquals("/token/anonymous", tokenRefreshRequest?.path)
+
+        val retriedRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull(retriedRequest)
+        assertEquals("POST", retriedRequest?.method)
+        assertEquals("Bearer refreshed-anon-token", retriedRequest?.getHeader("Authorization"))
+        assertEquals("refreshed-anon-token", settingsService.getStoredAnonymousToken())
+
+        waitForTranslationResult()
+    }
+
+    fun testTranslateActionDoesNotRetryManualToken401() {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(401)
+                .setBody("Invalid API token for configured account")
+        )
+
+        executeAction()
+
+        val recordedRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull(recordedRequest)
+        assertEquals("POST", recordedRequest?.method)
+        assertEquals("Bearer test-token", recordedRequest?.getHeader("Authorization"))
+        assertNull(mockWebServer.takeRequest(1, TimeUnit.SECONDS))
+    }
+
+    private fun executeAction() {
+        val action = TranslateWithDolocAction()
+        val dataContext = MapDataContext()
+        dataContext.put(CommonDataKeys.VIRTUAL_FILE_ARRAY, arrayOf(xliffFile))
+        dataContext.put(CommonDataKeys.PROJECT, project)
+
+        val event = AnActionEvent.createFromDataContext("test", null, dataContext)
+
+        ApplicationManager.getApplication().runWriteAction {
+            DolocRequestBuilder.setBaseUrl(mockWebServer.url("/").toString().removeSuffix("/"))
+            action.actionPerformed(event)
+        }
+    }
+
+    private fun waitForTranslationResult() {
+        val deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(5)
+        while (System.currentTimeMillis() < deadline) {
+            ApplicationManager.getApplication().invokeAndWait {
+                xliffFile.refresh(false, false)
+            }
+
+            if (VfsUtil.loadText(xliffFile).contains("state=\"translated\"")) {
+                return
+            }
+
+            Thread.sleep(50)
+        }
+
+        assertTrue(
+            "File should contain translation state='translated'",
+            VfsUtil.loadText(xliffFile).contains("state=\"translated\"")
+        )
     }
 }
-
