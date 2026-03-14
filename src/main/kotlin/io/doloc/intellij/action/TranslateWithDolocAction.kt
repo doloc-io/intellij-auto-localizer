@@ -324,14 +324,20 @@ class TranslateWithDolocAction @JvmOverloads constructor(
     }
 
     private fun ensureApiToken(project: Project): Boolean {
-        if (DolocSettingsService.getInstance().getApiToken() != null) {
+        val settingsService = DolocSettingsService.getInstance()
+        if (DolocSettingsState.getInstance().useAnonymousToken) {
+            return true
+        }
+
+        if (!settingsService.peekApiToken().isNullOrBlank()) {
             return true
         }
 
         showNotification(
             project,
             "No API Token configured!",
-            "Please fetch a (free) API token from doloc.io/account and enter it in settings.",
+            "Please fetch a (free) API token from doloc.io/account and enter it in settings. " +
+                    "Alternatively, you can switch back to an anonymous token.",
             NotificationType.ERROR,
             object : AnAction("Visit doloc.io/account") {
                 override fun actionPerformed(e: AnActionEvent) {
@@ -569,7 +575,9 @@ class TranslateWithDolocAction @JvmOverloads constructor(
     private fun currentRequestAuth(): RequestAuth {
         val usesAnonymousToken = DolocSettingsState.getInstance().useAnonymousToken
         val token = DolocSettingsService.getInstance().getApiToken()
-            ?: throw IllegalStateException("No API token available")
+            ?: throw IllegalStateException(
+                if (usesAnonymousToken) "Failed to get anonymous token" else "No API token available"
+            )
         return RequestAuth(token, usesAnonymousToken)
     }
 

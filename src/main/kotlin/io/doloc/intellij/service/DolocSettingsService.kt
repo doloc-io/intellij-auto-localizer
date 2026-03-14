@@ -60,6 +60,18 @@ class DolocSettingsService {
         }
     }
 
+    /**
+     * Returns the currently selected token without triggering anonymous token creation.
+     */
+    fun peekApiToken(): String? {
+        val state = DolocSettingsState.getInstance()
+        return if (state.useAnonymousToken) {
+            getStoredAnonymousToken()
+        } else {
+            getStoredManualToken()
+        }
+    }
+
     private fun getOrCreateAnonymousToken(): String? {
         synchronized(anonymousTokenLock) {
             val stored = getStoredAnonymousToken()

@@ -124,6 +124,43 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         waitForTranslationResult()
     }
 
+    fun testTranslateActionCreatesAnonymousTokenOnFirstUse() {
+        val settingsService = DolocSettingsService.getInstance()
+        settingsService.clearApiToken()
+        settingsService.clearAnonymousToken()
+        DolocSettingsState.getInstance().useAnonymousToken = true
+
+        val translatedContent = File(
+            javaClass.classLoader.getResource("xliff/fully_translated.xlf")!!.file
+        ).readText()
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""{"token":"new-anonymous-token","user_id":"1234-1234-1234-1234"}""")
+                .addHeader("Content-Type", "application/json")
+        )
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(translatedContent)
+        )
+
+        executeAction()
+
+        val tokenRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull(tokenRequest)
+        assertEquals("PUT", tokenRequest?.method)
+        assertEquals("/token/anonymous", tokenRequest?.path)
+
+        val translationRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull(translationRequest)
+        assertEquals("POST", translationRequest?.method)
+        assertEquals("Bearer new-anonymous-token", translationRequest?.getHeader("Authorization"))
+        assertEquals("new-anonymous-token", settingsService.getStoredAnonymousToken())
+
+        waitForTranslationResult()
+    }
+
     fun testTranslateActionSupportsSingleEditorFileContext() {
         val translatedContent = File(javaClass.classLoader.getResource("xliff/fully_translated.xlf")!!.file)
             .readText()
@@ -205,6 +242,17 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         assertNotNull(recordedRequest)
         assertEquals("POST", recordedRequest?.method)
         assertEquals("Bearer test-token", recordedRequest?.getHeader("Authorization"))
+        assertNull(mockWebServer.takeRequest(1, TimeUnit.SECONDS))
+    }
+
+    fun testTranslateActionDoesNotRequestWhenManualTokenIsMissing() {
+        val settingsService = DolocSettingsService.getInstance()
+        settingsService.clearApiToken()
+        settingsService.clearAnonymousToken()
+        DolocSettingsState.getInstance().useAnonymousToken = false
+
+        executeAction()
+
         assertNull(mockWebServer.takeRequest(1, TimeUnit.SECONDS))
     }
 

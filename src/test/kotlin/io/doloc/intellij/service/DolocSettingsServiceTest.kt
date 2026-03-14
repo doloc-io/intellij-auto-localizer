@@ -83,4 +83,27 @@ class DolocSettingsServiceTest : BasePlatformTestCase() {
         DolocSettingsState.getInstance().useAnonymousToken = true
         assertEquals(anonymousToken, service.getApiToken())
     }
+
+    @Test
+    fun testPeekApiTokenUsesSelectedStoredToken() {
+        val manualToken = "manual-token"
+        val anonymousToken = "anon-token"
+
+        service.setApiToken(manualToken)
+        service.setAnonymousToken(anonymousToken)
+
+        DolocSettingsState.getInstance().useAnonymousToken = false
+        assertEquals(manualToken, service.peekApiToken())
+
+        DolocSettingsState.getInstance().useAnonymousToken = true
+        assertEquals(anonymousToken, service.peekApiToken())
+    }
+
+    @Test
+    fun testPeekApiTokenDoesNotCreateAnonymousToken() {
+        service.clearAnonymousToken()
+        DolocSettingsState.getInstance().useAnonymousToken = true
+
+        assertNull(service.peekApiToken())
+    }
 }
