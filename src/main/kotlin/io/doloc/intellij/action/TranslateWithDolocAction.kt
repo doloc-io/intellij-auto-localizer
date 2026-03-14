@@ -65,8 +65,8 @@ class TranslateWithDolocAction @JvmOverloads constructor(
 
     override fun update(e: AnActionEvent) {
         val project = e.project
-        val files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY)
-        val enabled = project != null && files != null && files.isNotEmpty() && files.any { isSupportedFile(it) }
+        val files = selectedFiles(e)
+        val enabled = project != null && files.isNotEmpty() && files.any { isSupportedFile(it) }
         e.presentation.isEnabledAndVisible = enabled
     }
 
@@ -76,7 +76,7 @@ class TranslateWithDolocAction @JvmOverloads constructor(
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        val files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY)?.toList().orEmpty()
+        val files = selectedFiles(e)
         if (files.isEmpty()) return
 
         val validation = validateSelection(files)
@@ -599,6 +599,19 @@ class TranslateWithDolocAction @JvmOverloads constructor(
         } else {
             "$targetName: status $statusCode - $responseBody"
         }
+    }
+
+    private fun selectedFiles(e: AnActionEvent): List<VirtualFile> {
+        val selectedFiles = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY)
+            ?.toList()
+            .orEmpty()
+            .distinctBy { it.path }
+        if (selectedFiles.isNotEmpty()) {
+            return selectedFiles
+        }
+
+        val singleFile = e.getData(CommonDataKeys.VIRTUAL_FILE) ?: return emptyList()
+        return listOf(singleFile)
     }
 
     private fun isSupportedFile(file: VirtualFile): Boolean = isArbFile(file) || isXliffFile(file)

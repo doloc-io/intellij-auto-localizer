@@ -124,6 +124,26 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         waitForTranslationResult()
     }
 
+    fun testTranslateActionSupportsSingleEditorFileContext() {
+        val translatedContent = File(javaClass.classLoader.getResource("xliff/fully_translated.xlf")!!.file)
+            .readText()
+
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(translatedContent)
+        )
+
+        executeAction(useVirtualFileArray = false)
+
+        val recordedRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull("No request was recorded", recordedRequest)
+        assertEquals("POST", recordedRequest?.method)
+        assertEquals("Bearer test-token", recordedRequest?.getHeader("Authorization"))
+
+        waitForTranslationResult()
+    }
+
     fun testTranslateActionRetriesOnceWithRefreshedAnonymousToken() {
         val settingsService = DolocSettingsService.getInstance()
         settingsService.clearApiToken()
@@ -217,10 +237,15 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
 
     private fun executeAction(
         action: TranslateWithDolocAction = TranslateWithDolocAction(),
-        file: VirtualFile = xliffFile
+        file: VirtualFile = xliffFile,
+        useVirtualFileArray: Boolean = true
     ) {
         val dataContext = MapDataContext()
-        dataContext.put(CommonDataKeys.VIRTUAL_FILE_ARRAY, arrayOf(file))
+        if (useVirtualFileArray) {
+            dataContext.put(CommonDataKeys.VIRTUAL_FILE_ARRAY, arrayOf(file))
+        } else {
+            dataContext.put(CommonDataKeys.VIRTUAL_FILE, file)
+        }
         dataContext.put(CommonDataKeys.PROJECT, project)
 
         val event = AnActionEvent.createFromDataContext("test", null, dataContext)

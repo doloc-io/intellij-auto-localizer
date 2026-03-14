@@ -92,6 +92,7 @@ Optionally:
                 text="Translate with Auto Localizer"
                 description="Translate XLIFF or ARB files with doloc service">
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
     </actions>
 
