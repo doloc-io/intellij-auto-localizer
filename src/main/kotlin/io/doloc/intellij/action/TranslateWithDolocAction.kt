@@ -34,10 +34,16 @@ import io.doloc.intellij.util.utmUrl
 import io.doloc.intellij.xliff.LightweightXliffScanner
 import io.doloc.intellij.xliff.TargetLanguageAttribute
 import io.doloc.intellij.xliff.TargetLanguageHelper
+import io.doloc.intellij.xliff.XliffParseException
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 
-class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
+class TranslateWithDolocAction @JvmOverloads constructor(
+    private val xliffScanner: LightweightXliffScanner = LightweightXliffScanner(),
+    private val showXliffParseError: (Project, String, String) -> Unit = { project, message, title ->
+        Messages.showErrorDialog(project, message, title)
+    }
+) : AnAction("Translate with Auto Localizer") {
     private val log = logger<TranslateWithDolocAction>()
     private val notificationGroup =
         NotificationGroupManager.getInstance().getNotificationGroup("Doloc Translation")
@@ -109,16 +115,12 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
 
         FileDocumentManager.getInstance().saveAllDocuments()
 
+        val settings = DolocSettingsState.getInstance()
+        val scanResult = scanXliffOrShowParseError(project, file, settings) ?: return
+
         if (!confirmOverwriteTargets(project, listOf(file))) {
             return
         }
-
-        val settings = DolocSettingsState.getInstance()
-        val scanResult = LightweightXliffScanner().scan(
-            file,
-            settings.xliff12UntranslatedStates,
-            settings.xliff20UntranslatedStates
-        )
 
         val ensuredScanResult = ensureTargetLanguage(project, file, scanResult, settings) ?: return
         val translationScanResult = ensuredScanResult
@@ -433,11 +435,7 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
             return null
         }
 
-        val rescanned = LightweightXliffScanner().scan(
-            file,
-            settings.xliff12UntranslatedStates,
-            settings.xliff20UntranslatedStates
-        )
+        val rescanned = scanXliffOrShowParseError(project, file, settings) ?: return null
         if (rescanned.targetLanguageValue.isNullOrBlank()) {
             Messages.showErrorDialog(
                 project,
@@ -448,6 +446,27 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         }
 
         return rescanned
+    }
+
+    private fun scanXliffOrShowParseError(
+        project: Project,
+        file: VirtualFile,
+        settings: DolocSettingsState
+    ): LightweightXliffScanner.ScanResult? {
+        return try {
+            xliffScanner.scan(
+                file,
+                settings.xliff12UntranslatedStates,
+                settings.xliff20UntranslatedStates
+            )
+        } catch (e: XliffParseException) {
+            handleXliffParseFailure(project, e)
+            null
+        }
+    }
+
+    private fun handleXliffParseFailure(project: Project, exception: XliffParseException) {
+        showXliffParseError(project, exception.toUserMessage(), "XLIFF Translation")
     }
 
     private fun applyTargetLanguageQuickFix(

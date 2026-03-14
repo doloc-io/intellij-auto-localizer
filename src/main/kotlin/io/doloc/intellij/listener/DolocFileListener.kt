@@ -18,6 +18,7 @@ import io.doloc.intellij.filetype.XliffFileType
 import io.doloc.intellij.settings.DolocSettingsState
 import io.doloc.intellij.util.logger
 import io.doloc.intellij.xliff.LightweightXliffScanner
+import io.doloc.intellij.xliff.XliffParseException
 import java.io.File
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -82,6 +83,8 @@ class DolocFileListener : BulkFileListener {
                 showXliffNotification(project, file)
             }
         } catch (_: ArbParseException) {
+            return
+        } catch (_: XliffParseException) {
             return
         } catch (e: Exception) {
             log.warn("Error checking file for untranslated units: ${e.message}")

@@ -23,7 +23,7 @@ High quality localization with one click!</p>
   <li>"Translate with Auto Localizer" action in the context menu of XLIFF and ARB files</li>
   <li>Supports XLIFF 1.2, XLIFF 2.0, and Flutter-style ARB workflows</li>
   <li>Configurable for different translation states (e.g., initial, new, ...)</li>
-  <li>Notifications for untranslated XLIFF segments and ARB translation reminders on save</li>
+  <li>Notifications for untranslated XLIFF segments and ARB translation on save</li>
   <li>Powered by <a href="https://doloc.io?utm_source=intellij&utm_medium=plugin&utm_campaign=auto_localizer&utm_content=plugin_description_powered">doloc.io</a>, a translation service that uses AI to provide high-quality translations</li>
   <li>Free and without registration for translation files with up to 100 texts</li>
 </ul>
@@ -33,7 +33,7 @@ High quality localization with one click!</p>
 <ol>
     <li>Right-click on an XLIFF or ARB file in the Project View or Editor</li>
     <li>Select "Translate with Auto Localizer" from the context menu</li>
-    <li>The plugin will automatically translate the selected file or target files using the doloc service</li>
+    <li>The plugin will automatically translate the selected file using the doloc service</li>
     <li>To configure, open <b>File | Settings | Tools | Auto Localizer</b></li>
 </ol>
 
@@ -50,11 +50,11 @@ Optionally:
 <h2>Improvements</h2>
 <ul>
   <li>Add ARB translation support with Flutter-aware base file heuristics, directory-scoped overrides, and ARB save reminders.</li>
-  <li>Stop translations early when the target language attribute is missing and offer a quick fix based on the file name.</li>
+  <li>Update anonymous token if it was invalidated.</li>
 </ul>
 <h2>Bug Fixes</h2>
 <ul>
-  <li>Do not incorrectly notify about untranslated strings for empty targets with correct state</li>
+  <li>Show a clear dialog when manually translating malformed XLIFF files instead of surfacing a raw parse failure.</li>
 </ul>
     ]]></change-notes>
 

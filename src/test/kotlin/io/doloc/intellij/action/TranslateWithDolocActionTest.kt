@@ -188,10 +188,39 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         assertNull(mockWebServer.takeRequest(1, TimeUnit.SECONDS))
     }
 
-    private fun executeAction() {
-        val action = TranslateWithDolocAction()
+    fun testTranslateActionAbortsWhenXliffIsMalformed() {
+        val malformedFile = createVirtualFile(
+            "malformed.xlf",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2">
+  <file source-language="en" target-language="fr">
+    <body>
+      <trans-unit id="1">
+        <source>Hello</source>
+        <target>Hello</source>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>"""
+        )
+        val parseErrors = mutableListOf<String>()
+        val action = TranslateWithDolocAction(
+            showXliffParseError = { _, message, _ -> parseErrors += message }
+        )
+
+        executeAction(action, malformedFile)
+
+        assertNull(mockWebServer.takeRequest(1, TimeUnit.SECONDS))
+        assertEquals(1, parseErrors.size)
+        assertTrue(parseErrors.single().contains("malformed.xlf"))
+    }
+
+    private fun executeAction(
+        action: TranslateWithDolocAction = TranslateWithDolocAction(),
+        file: VirtualFile = xliffFile
+    ) {
         val dataContext = MapDataContext()
-        dataContext.put(CommonDataKeys.VIRTUAL_FILE_ARRAY, arrayOf(xliffFile))
+        dataContext.put(CommonDataKeys.VIRTUAL_FILE_ARRAY, arrayOf(file))
         dataContext.put(CommonDataKeys.PROJECT, project)
 
         val event = AnActionEvent.createFromDataContext("test", null, dataContext)
@@ -200,6 +229,14 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
             DolocRequestBuilder.setBaseUrl(mockWebServer.url("/").toString().removeSuffix("/"))
             action.actionPerformed(event)
         }
+    }
+
+    private fun createVirtualFile(name: String, content: String): VirtualFile {
+        val physicalFile = tempDir.resolve(name).toFile()
+        physicalFile.parentFile?.mkdirs()
+        physicalFile.writeText(content)
+        return LocalFileSystem.getInstance().refreshAndFindFileByIoFile(physicalFile)
+            ?: error("Missing virtual file for $name")
     }
 
     private fun waitForTranslationResult() {
