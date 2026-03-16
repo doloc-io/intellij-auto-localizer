@@ -55,7 +55,7 @@ Optionally:
 <h2>Bug Fixes</h2>
 <ul>
   <li>Show a clear dialog when manually translating malformed XLIFF files instead of surfacing a raw parse failure.</li>
-  <li>Show the translation action from Project View and file tabs without adding it to the editor text context menu.</li>
+  <li>Show the translation action from Project View and file tabs context menu.</li>
 </ul>
     ]]></change-notes>
 
