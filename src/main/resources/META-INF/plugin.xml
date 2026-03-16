@@ -20,7 +20,7 @@ High quality localization with one click!</p>
 <h3>Key features:</h3>
 <p>
 <ul>
-  <li>"Translate with Auto Localizer" action in the context menu of XLIFF and ARB files</li>
+  <li>"Translate with Auto Localizer" action in the Project View and editor tab context menus for XLIFF and ARB files</li>
   <li>Supports XLIFF 1.2, XLIFF 2.0, and Flutter-style ARB workflows</li>
   <li>Configurable for different translation states (e.g., initial, new, ...)</li>
   <li>Notifications for untranslated XLIFF segments and ARB translation on save</li>
@@ -31,7 +31,7 @@ High quality localization with one click!</p>
 <h3>Getting started:</h3>
 <p>
 <ol>
-    <li>Right-click on an XLIFF or ARB file in the Project View or Editor</li>
+    <li>Right-click on an XLIFF or ARB file in the Project View or an editor tab</li>
     <li>Select "Translate with Auto Localizer" from the context menu</li>
     <li>The plugin will automatically translate the selected file using the doloc service</li>
     <li>To configure, open <b>File | Settings | Tools | Auto Localizer</b></li>
@@ -55,6 +55,7 @@ Optionally:
 <h2>Bug Fixes</h2>
 <ul>
   <li>Show a clear dialog when manually translating malformed XLIFF files instead of surfacing a raw parse failure.</li>
+  <li>Show the translation action from Project View and file tabs without adding it to the editor text context menu.</li>
 </ul>
     ]]></change-notes>
 
@@ -92,7 +93,7 @@ Optionally:
                 text="Translate with Auto Localizer"
                 description="Translate XLIFF or ARB files with doloc service">
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
         </action>
     </actions>
 

@@ -161,7 +161,7 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         waitForTranslationResult()
     }
 
-    fun testTranslateActionSupportsSingleEditorFileContext() {
+    fun testTranslateActionSupportsSingleFileTabContext() {
         val translatedContent = File(javaClass.classLoader.getResource("xliff/fully_translated.xlf")!!.file)
             .readText()
 
