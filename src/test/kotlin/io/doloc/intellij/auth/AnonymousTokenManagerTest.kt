@@ -29,7 +29,7 @@ class AnonymousTokenManagerTest {
         // Create token manager that points to our mock server
         tokenManager = AnonymousTokenManager(
             settingsService = mockSettingsService,
-            baseUrl = mockWebServer.url("/").toString().removeSuffix("/")
+            baseUrlProvider = { mockWebServer.url("/").toString().removeSuffix("/") }
         )
     }
 

@@ -20,31 +20,53 @@ import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import io.doloc.intellij.api.DolocRequestBuilder
+import io.doloc.intellij.arb.ArbPairResolver
+import io.doloc.intellij.arb.ArbTranslationJob
+import io.doloc.intellij.arb.ArbTranslationTargetsFinder
+import io.doloc.intellij.arb.ArbTranslationWorkflow
 import io.doloc.intellij.http.HttpClientProvider
 import io.doloc.intellij.service.DolocSettingsService
+import io.doloc.intellij.settings.DolocConfigurable
 import io.doloc.intellij.settings.DolocSettingsState
+import io.doloc.intellij.translation.SelectionValidationResult
+import io.doloc.intellij.translation.TranslationKind
+import io.doloc.intellij.util.utmUrl
 import io.doloc.intellij.xliff.LightweightXliffScanner
 import io.doloc.intellij.xliff.TargetLanguageAttribute
 import io.doloc.intellij.xliff.TargetLanguageHelper
-import io.doloc.intellij.settings.DolocConfigurable
-import io.doloc.intellij.util.utmUrl
-
+import io.doloc.intellij.xliff.XliffParseException
+import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 
-class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
+class TranslateWithDolocAction @JvmOverloads constructor(
+    private val xliffScanner: LightweightXliffScanner = LightweightXliffScanner(),
+    private val showXliffParseError: (Project, String, String) -> Unit = { project, message, title ->
+        Messages.showErrorDialog(project, message, title)
+    }
+) : AnAction("Translate with Auto Localizer") {
     private val log = logger<TranslateWithDolocAction>()
     private val notificationGroup =
         NotificationGroupManager.getInstance().getNotificationGroup("Doloc Translation")
+    private val arbPairResolver = ArbPairResolver()
+    private val arbTargetsFinder = ArbTranslationTargetsFinder(arbPairResolver)
+    private val arbWorkflow = ArbTranslationWorkflow(
+        pairResolver = arbPairResolver,
+        targetsFinder = arbTargetsFinder,
+        ensureApiToken = ::ensureApiToken,
+        confirmOverwriteTargets = ::confirmOverwriteTargets,
+        confirmFanOut = ::confirmArbFanOut,
+        executeJobs = ::executeArbJobs
+    )
+
+    private data class RequestAuth(
+        val token: String,
+        val usesAnonymousToken: Boolean
+    )
 
     override fun update(e: AnActionEvent) {
         val project = e.project
-        val files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY)
-
-        // Enable only if we have a project and exactly one XLIFF file
-        val enabled = project != null && files != null &&
-                files.size == 1 &&
-                files[0].extension?.lowercase() in listOf("xlf", "xliff")
-
+        val files = selectedFiles(e)
+        val enabled = project != null && files.isNotEmpty() && files.any { isSupportedFile(it) }
         e.presentation.isEnabledAndVisible = enabled
     }
 
@@ -54,74 +76,56 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        val file = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY)?.firstOrNull() ?: return
+        val files = selectedFiles(e)
+        if (files.isEmpty()) return
 
-        performTranslation(project, file)
-    }
-
-    fun performTranslation(
-        project: Project,
-        file: VirtualFile
-    ) {
-        if (DolocSettingsService.getInstance().getApiToken() == null) {
-            showNotification(
-                project,
-                "No API Token configured!",
-                "Please fetch a (free) API token from doloc.io/account and enter it in settings.",
-                NotificationType.ERROR,
-                object : AnAction("Visit doloc.io/account") {
-                    override fun actionPerformed(e: AnActionEvent) {
-                        BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_no_token"))
-                    }
-                },
-                object : AnAction("Open Settings") {
-                    override fun actionPerformed(e: AnActionEvent) {
-                        ShowSettingsUtil.getInstance().showSettingsDialog(
-                            project,
-                            DolocConfigurable::class.java
-                        )
-                    }
-                }
-            )
+        val validation = validateSelection(files)
+        if (!validation.isValid) {
+            Messages.showWarningDialog(project, validation.message.orEmpty(), validation.title ?: "Auto Localizer")
             return
         }
 
-        // Save all documents to ensure we're working with the latest content
+        when (validation.kind) {
+            TranslationKind.XLIFF -> {
+                if (files.size != 1) {
+                    Messages.showInfoMessage(
+                        project,
+                        "Please select exactly one XLIFF file at a time.",
+                        "Auto Localizer"
+                    )
+                    return
+                }
+                performTranslation(project, files.single())
+            }
+
+            TranslationKind.ARB -> {
+                if (files.size == 1 && arbPairResolver.isScopeBase(project, files.single())) {
+                    performArbBaseTranslation(project, files.single())
+                } else {
+                    performArbTranslation(project, files)
+                }
+            }
+
+            else -> Unit
+        }
+    }
+
+    fun performTranslation(project: Project, file: VirtualFile) {
+        if (!ensureApiToken(project)) return
+
         FileDocumentManager.getInstance().saveAllDocuments()
 
-        // Check if file is under VCS
-        val changeListManager = ChangeListManager.getInstance(project)
-        val isUnderVcs = !changeListManager.isUnversioned(file)
-
-        // If not under VCS, show warning dialog
-        if (!isUnderVcs) {
-            val result = Messages.showYesNoDialog(
-                project,
-                "File \"${file.name}\" is not under version control. Overwrite anyway?",
-                "doloc Translation",
-                "Overwrite",
-                "Cancel",
-                Messages.getWarningIcon()
-            )
-            if (result != Messages.YES) {
-                return
-            }
-        }
-
         val settings = DolocSettingsState.getInstance()
-        val scanResult = LightweightXliffScanner().scan(
-            file,
-            settings.xliff12UntranslatedStates,
-            settings.xliff20UntranslatedStates
-        )
+        val scanResult = scanXliffOrShowParseError(project, file, settings) ?: return
+
+        if (!confirmOverwriteTargets(project, listOf(file))) {
+            return
+        }
 
         val ensuredScanResult = ensureTargetLanguage(project, file, scanResult, settings) ?: return
         val translationScanResult = ensuredScanResult
 
-        // Start the translation as a background task
         object : Task.Backgroundable(project, "Translating ${file.name}", true) {
-
-            @Suppress("DialogTitleCapitalization")
             override fun run(indicator: ProgressIndicator) {
                 indicator.isIndeterminate = true
 
@@ -138,91 +142,30 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
                         settings.xliff12NewState
                     }
 
-                    val request = DolocRequestBuilder.createTranslationRequest(
-
-                        file,
-                        untranslatedStates = untranslatedStates,
-                        newState = newState
-                    )
-
-                    // Send request
-                    val response = HttpClientProvider.client.send(
-                        request,
-                        HttpResponse.BodyHandlers.ofByteArray()
-                    )
+                    val response = sendTranslationRequest {
+                        DolocRequestBuilder.createTranslationRequest(
+                            filePath = file,
+                            token = it,
+                            untranslatedStates = untranslatedStates,
+                            newState = newState
+                        )
+                    }
 
                     if (response.statusCode() == 200) {
                         val responseText = String(response.body())
-
-                        // First get on the EDT, then run the write action
-                        ApplicationManager.getApplication()
-                            .invokeAndWait {
-                                ApplicationManager.getApplication()
-                                    .runWriteAction {
-                                        VfsUtil.saveText(file, responseText)
-                                    }
-
-                                // Show notification after the file is saved
-                                showNotification(
-                                    project,
-                                    "Translation complete",
-                                    "Successfully translated ${file.name}",
-                                    NotificationType.INFORMATION
-                                )
+                        ApplicationManager.getApplication().invokeAndWait {
+                            ApplicationManager.getApplication().runWriteAction {
+                                VfsUtil.saveText(file, responseText)
                             }
-                    } else if (response.statusCode() == 402) {
-                        val isAnonymousToken = DolocSettingsState.getInstance().useAnonymousToken
-                        if (isAnonymousToken) {
                             showNotification(
                                 project,
-                                "Translation failed: Quota exceeded!",
-                                "Your monthly free quota of 100 source texts is used. Please register an account on doloc.io with a paid plan for increased quota.",
-                                NotificationType.ERROR,
-                                object : AnAction("Register on doloc.io") {
-                                    override fun actionPerformed(e: AnActionEvent) {
-                                        BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_quota_exceeded"))
-                                    }
-                                },
-                                object : AnAction("Configure API Token in Settings") {
-                                    override fun actionPerformed(e: AnActionEvent) {
-                                        ShowSettingsUtil.getInstance().showSettingsDialog(
-                                            project,
-                                            DolocConfigurable::class.java
-                                        )
-                                    }
-                                }
-
+                                "Translation complete",
+                                "Successfully translated ${file.name}",
+                                NotificationType.INFORMATION
                             )
-                        } else {
-                            showNotification(
-                                project,
-                                "Translation failed: Quota exceeded!",
-                                "Your monthly quota is used. Consider upgrading your account.",
-                                NotificationType.ERROR,
-                                object : AnAction("Visit doloc.io/account") {
-                                    override fun actionPerformed(e: AnActionEvent) {
-                                        BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_quota_exceeded"))
-                                    }
-                                }
-                            )
-
                         }
                     } else {
-                        val responseBody = try {
-                            String(response.body()).trim()
-                        } catch (ignored: Exception) {
-                            ""
-                        }
-
-                        val message = buildString {
-                            append("Translation failed with status: ${response.statusCode()}")
-                            if (responseBody.isNotEmpty()) {
-                                append('\n')
-                                append(responseBody)
-                            }
-                        }
-
-                        throw IllegalStateException(message)
+                        handleErrorResponse(project, response.statusCode(), response.body())
                     }
                 } catch (e: ProcessCanceledException) {
                     throw e
@@ -239,6 +182,210 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         }.queue()
     }
 
+    fun performArbTranslation(project: Project, files: List<VirtualFile>) {
+        arbWorkflow.performTranslation(project, files)
+    }
+
+    fun performArbBaseTranslation(
+        project: Project,
+        baseFile: VirtualFile,
+        skipFanOutConfirmation: Boolean = false
+    ) {
+        arbWorkflow.performBaseTranslation(project, baseFile, skipFanOutConfirmation)
+    }
+
+    private fun executeArbJobs(project: Project, jobs: List<ArbTranslationJob>, taskTitle: String) {
+        val settings = DolocSettingsState.getInstance()
+        object : Task.Backgroundable(project, taskTitle, true) {
+            override fun run(indicator: ProgressIndicator) {
+                val failures = mutableListOf<String>()
+                var successCount = 0
+
+                jobs.forEachIndexed { index, job ->
+                    indicator.text = "Translating ${job.targetFile.name} (${index + 1}/${jobs.size})"
+                    indicator.fraction = (index.toDouble() / jobs.size.toDouble()).coerceIn(0.0, 1.0)
+
+                    try {
+                        val response = sendTranslationRequest {
+                            DolocRequestBuilder.createArbTranslationRequest(
+                                sourceFile = job.baseFile,
+                                targetFile = job.targetFile,
+                                token = it,
+                                untranslatedStates = settings.arbUntranslatedStates,
+                                sourceLang = job.sourceLang,
+                                targetLang = job.targetLang
+                            )
+                        }
+
+                        if (response.statusCode() == 200) {
+                            val responseText = String(response.body())
+                            ApplicationManager.getApplication().invokeAndWait {
+                                ApplicationManager.getApplication().runWriteAction {
+                                    VfsUtil.saveText(job.targetFile, responseText)
+                                }
+                            }
+                            successCount++
+                        } else {
+                            if (response.statusCode() == 402) {
+                                handleErrorResponse(project, response.statusCode(), response.body())
+                                return
+                            }
+                            failures += formatFailure(job.targetFile.name, response.statusCode(), response.body())
+                        }
+                    } catch (e: ProcessCanceledException) {
+                        throw e
+                    } catch (e: Exception) {
+                        log.warn("ARB translation failed for ${job.targetFile.path}", e)
+                        failures += "${job.targetFile.name}: ${e.message ?: "Unknown error"}"
+                    }
+                }
+
+                ApplicationManager.getApplication().invokeLater {
+                    when {
+                        failures.isEmpty() -> showNotification(
+                            project,
+                            "Translation complete",
+                            "Successfully translated ${successCount} ARB file(s).",
+                            NotificationType.INFORMATION
+                        )
+
+                        successCount == 0 -> showNotification(
+                            project,
+                            "Translation failed",
+                            failures.joinToString("\n"),
+                            NotificationType.ERROR
+                        )
+
+                        else -> showNotification(
+                            project,
+                            "Translation finished with issues",
+                            buildString {
+                                append("Translated ")
+                                append(successCount)
+                                append(" ARB file(s).\n")
+                                append(failures.joinToString("\n"))
+                            },
+                            NotificationType.WARNING
+                        )
+                    }
+                }
+            }
+        }.queue()
+    }
+
+    private fun confirmArbFanOut(project: Project, baseFile: VirtualFile, targets: List<VirtualFile>): Boolean {
+        val listedTargets = targets.take(8).joinToString("\n") { "- ${it.name}" }
+        val extraCount = (targets.size - 8).coerceAtLeast(0)
+        val message = buildString {
+            append("Translate ${baseFile.name} into the following target files?\n\n")
+            append(listedTargets)
+            if (extraCount > 0) {
+                append("\n- +")
+                append(extraCount)
+                append(" more")
+            }
+        }
+        return Messages.showYesNoDialog(
+            project,
+            message,
+            "Auto Localizer",
+            "Translate",
+            "Cancel",
+            Messages.getQuestionIcon()
+        ) == Messages.YES
+    }
+
+    private fun confirmOverwriteTargets(project: Project, targets: List<VirtualFile>): Boolean {
+        val unversionedTargets = targets.filter { ChangeListManager.getInstance(project).isUnversioned(it) }
+        if (unversionedTargets.isEmpty()) {
+            return true
+        }
+
+        val names = unversionedTargets.take(6).joinToString("\n") { "- ${it.name}" }
+        val extraCount = (unversionedTargets.size - 6).coerceAtLeast(0)
+        val message = buildString {
+            append("The following target files are not under version control. Overwrite anyway?\n\n")
+            append(names)
+            if (extraCount > 0) {
+                append("\n- +")
+                append(extraCount)
+                append(" more")
+            }
+        }
+
+        return Messages.showYesNoDialog(
+            project,
+            message,
+            "Auto Localizer",
+            "Overwrite",
+            "Cancel",
+            Messages.getWarningIcon()
+        ) == Messages.YES
+    }
+
+    private fun ensureApiToken(project: Project): Boolean {
+        val settingsService = DolocSettingsService.getInstance()
+        if (DolocSettingsState.getInstance().useAnonymousToken) {
+            return true
+        }
+
+        if (!settingsService.peekApiToken().isNullOrBlank()) {
+            return true
+        }
+
+        showNotification(
+            project,
+            "No API Token configured!",
+            "Please fetch a (free) API token from doloc.io/account and enter it in settings. " +
+                    "Alternatively, you can switch back to an anonymous token.",
+            NotificationType.ERROR,
+            object : AnAction("Visit doloc.io/account") {
+                override fun actionPerformed(e: AnActionEvent) {
+                    BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_no_token"))
+                }
+            },
+            object : AnAction("Open Settings") {
+                override fun actionPerformed(e: AnActionEvent) {
+                    ShowSettingsUtil.getInstance().showSettingsDialog(
+                        project,
+                        DolocConfigurable::class.java
+                    )
+                }
+            }
+        )
+        return false
+    }
+
+    private fun validateSelection(files: List<VirtualFile>): SelectionValidationResult {
+        val kinds = files.map {
+            when {
+                isArbFile(it) -> TranslationKind.ARB
+                isXliffFile(it) -> TranslationKind.XLIFF
+                else -> TranslationKind.UNSUPPORTED
+            }
+        }.toSet()
+
+        return when {
+            kinds.contains(TranslationKind.UNSUPPORTED) -> SelectionValidationResult(
+                kind = null,
+                isValid = false,
+                title = "Auto Localizer",
+                message = "The current selection mixes supported files with unsupported files. Please select only ARB files or only one XLIFF file."
+            )
+
+            kinds.size > 1 -> SelectionValidationResult(
+                kind = null,
+                isValid = false,
+                title = "Auto Localizer",
+                message = "The current selection mixes ARB and XLIFF files. Please translate one format at a time."
+            )
+
+            kinds.singleOrNull() == TranslationKind.ARB -> SelectionValidationResult(TranslationKind.ARB, true)
+            kinds.singleOrNull() == TranslationKind.XLIFF -> SelectionValidationResult(TranslationKind.XLIFF, true)
+            else -> SelectionValidationResult(null, false, "Auto Localizer", "No supported translation files were selected.")
+        }
+    }
+
     private fun ensureTargetLanguage(
         project: Project,
         file: VirtualFile,
@@ -251,16 +398,18 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
 
         val attribute = scanResult.targetLanguageAttribute
         val baseMessage = buildString {
-            append("File \"${file.name}\" is missing the required \"")
+            append("File \"")
+            append(file.name)
+            append("\" is missing the required \"")
             append(attribute.attributeName)
-            append("\" attribute on &lt;")
+            append("\" attribute on <")
             append(attribute.elementName)
-            append("&gt;.\nPlease set the target language before translating.")
+            append(">.\nPlease set the target language before translating.")
         }
 
         val filenameLanguage = TargetLanguageHelper.guessLanguageFromFilename(file.name)
         if (filenameLanguage.isNullOrBlank()) {
-            Messages.showWarningDialog(project, baseMessage, "doloc Translation")
+            Messages.showWarningDialog(project, baseMessage, "Auto Localizer")
             return null
         }
 
@@ -274,7 +423,7 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         val selected = Messages.showDialog(
             project,
             dialogMessage,
-            "doloc Translation",
+            "Auto Localizer",
             arrayOf(applyButtonLabel, "Cancel"),
             0,
             Messages.getWarningIcon()
@@ -287,26 +436,43 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
             Messages.showErrorDialog(
                 project,
                 "Unable to update the file automatically. Please add ${attribute.attributeName}=\"$filenameLanguage\" manually and retry.",
-                "doloc Translation"
+                "Auto Localizer"
             )
             return null
         }
 
-        val rescanned = LightweightXliffScanner().scan(
-            file,
-            settings.xliff12UntranslatedStates,
-            settings.xliff20UntranslatedStates
-        )
+        val rescanned = scanXliffOrShowParseError(project, file, settings) ?: return null
         if (rescanned.targetLanguageValue.isNullOrBlank()) {
             Messages.showErrorDialog(
                 project,
                 "The target language attribute is still missing after applying the quick fix. Please update the file manually and retry.",
-                "doloc Translation"
+                "Auto Localizer"
             )
             return null
         }
 
         return rescanned
+    }
+
+    private fun scanXliffOrShowParseError(
+        project: Project,
+        file: VirtualFile,
+        settings: DolocSettingsState
+    ): LightweightXliffScanner.ScanResult? {
+        return try {
+            xliffScanner.scan(
+                file,
+                settings.xliff12UntranslatedStates,
+                settings.xliff20UntranslatedStates
+            )
+        } catch (e: XliffParseException) {
+            handleXliffParseFailure(project, e)
+            null
+        }
+    }
+
+    private fun handleXliffParseFailure(project: Project, exception: XliffParseException) {
+        showXliffParseError(project, exception.toUserMessage(), "XLIFF Translation")
     }
 
     private fun applyTargetLanguageQuickFix(
@@ -328,6 +494,143 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         }
     }
 
+    private fun handleErrorResponse(project: Project, statusCode: Int, body: ByteArray) {
+        if (statusCode == 402) {
+            val isAnonymousToken = DolocSettingsState.getInstance().useAnonymousToken
+            if (isAnonymousToken) {
+                showNotification(
+                    project,
+                    "Translation failed: Quota exceeded!",
+                    "Your monthly free quota of 100 source texts is used. Please register an account on doloc.io with a paid plan for increased quota.",
+                    NotificationType.ERROR,
+                    object : AnAction("Register on doloc.io") {
+                        override fun actionPerformed(e: AnActionEvent) {
+                            BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_quota_exceeded"))
+                        }
+                    },
+                    object : AnAction("Configure API Token in Settings") {
+                        override fun actionPerformed(e: AnActionEvent) {
+                            ShowSettingsUtil.getInstance().showSettingsDialog(
+                                project,
+                                DolocConfigurable::class.java
+                            )
+                        }
+                    }
+                )
+            } else {
+                showNotification(
+                    project,
+                    "Translation failed: Quota exceeded!",
+                    "Your monthly quota is used. Consider upgrading your account.",
+                    NotificationType.ERROR,
+                    object : AnAction("Visit doloc.io/account") {
+                        override fun actionPerformed(e: AnActionEvent) {
+                            BrowserUtil.browse(utmUrl("https://doloc.io/account", "action_quota_exceeded"))
+                        }
+                    }
+                )
+            }
+            return
+        }
+
+        val responseBody = try {
+            String(body).trim()
+        } catch (_: Exception) {
+            ""
+        }
+
+        val message = buildString {
+            append("Translation failed with status: $statusCode")
+            if (responseBody.isNotEmpty()) {
+                append('\n')
+                append(responseBody)
+            }
+        }
+        throw IllegalStateException(message)
+    }
+
+    private fun sendTranslationRequest(buildRequest: (String) -> HttpRequest): HttpResponse<ByteArray> {
+        val auth = currentRequestAuth()
+        val response = HttpClientProvider.client.send(
+            buildRequest(auth.token),
+            HttpResponse.BodyHandlers.ofByteArray()
+        )
+
+        if (!shouldRetryWithFreshAnonymousToken(auth, response)) {
+            return response
+        }
+
+        val refreshedToken = DolocSettingsService.getInstance().refreshAnonymousToken(auth.token)
+        if (refreshedToken.isNullOrBlank()) {
+            return response
+        }
+
+        log.info("Retrying translation request with refreshed anonymous token")
+        return HttpClientProvider.client.send(
+            buildRequest(refreshedToken),
+            HttpResponse.BodyHandlers.ofByteArray()
+        )
+    }
+
+    private fun currentRequestAuth(): RequestAuth {
+        val usesAnonymousToken = DolocSettingsState.getInstance().useAnonymousToken
+        val token = DolocSettingsService.getInstance().getApiToken()
+            ?: throw IllegalStateException(
+                if (usesAnonymousToken) "Failed to get anonymous token" else "No API token available"
+            )
+        return RequestAuth(token, usesAnonymousToken)
+    }
+
+    private fun shouldRetryWithFreshAnonymousToken(
+        auth: RequestAuth,
+        response: HttpResponse<ByteArray>
+    ): Boolean {
+        if (!auth.usesAnonymousToken || response.statusCode() != 401) {
+            return false
+        }
+
+        return getResponseBodyText(response.body()).contains("invalid api token", ignoreCase = true)
+    }
+
+    private fun getResponseBodyText(body: ByteArray): String {
+        return try {
+            String(body).trim()
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun formatFailure(targetName: String, statusCode: Int, body: ByteArray): String {
+        val responseBody = getResponseBodyText(body)
+        return if (responseBody.isBlank()) {
+            "$targetName: status $statusCode"
+        } else {
+            "$targetName: status $statusCode - $responseBody"
+        }
+    }
+
+    private fun selectedFiles(e: AnActionEvent): List<VirtualFile> {
+        val selectedFiles = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY)
+            ?.toList()
+            .orEmpty()
+            .distinctBy { it.path }
+        if (selectedFiles.isNotEmpty()) {
+            return selectedFiles
+        }
+
+        val singleFile = e.getData(CommonDataKeys.VIRTUAL_FILE) ?: return emptyList()
+        return listOf(singleFile)
+    }
+
+    private fun isSupportedFile(file: VirtualFile): Boolean = isArbFile(file) || isXliffFile(file)
+
+    private fun isArbFile(file: VirtualFile): Boolean = file.extension.equals("arb", ignoreCase = true)
+
+    private fun isXliffFile(file: VirtualFile): Boolean {
+        val extension = file.extension ?: return false
+        return extension.equals("xlf", ignoreCase = true) || extension.equals("xliff", ignoreCase = true)
+    }
+
     private fun showNotification(
         project: Project,
         title: String,
@@ -340,4 +643,3 @@ class TranslateWithDolocAction : AnAction("Translate with Auto Localizer") {
         notification.notify(project)
     }
 }
-

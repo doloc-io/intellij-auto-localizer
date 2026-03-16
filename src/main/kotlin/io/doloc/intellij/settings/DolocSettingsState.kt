@@ -41,6 +41,12 @@ class DolocSettingsState : PersistentStateComponent<DolocSettingsState> {
     var showReminderToast: Boolean = true
     var useAnonymousToken: Boolean = true
 
+    // ARB specific settings
+    val defaultArbUntranslatedStates = setOf(
+        "missing"
+    )
+    var arbUntranslatedStates: MutableSet<String> = defaultArbUntranslatedStates.toMutableSet()
+
     override fun getState(): DolocSettingsState = this
 
     override fun loadState(state: DolocSettingsState) {

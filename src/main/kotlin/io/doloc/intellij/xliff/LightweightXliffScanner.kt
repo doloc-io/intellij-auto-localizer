@@ -27,22 +27,28 @@ class LightweightXliffScanner {
         xliff12UntranslatedStates: Set<String>,
         xliff20UntranslatedStates: Set<String>,
     ): ScanResult {
-        val handler = XliffHandler(xliff12UntranslatedStates, xliff20UntranslatedStates)
-        val factory = SAXParserFactory.newInstance()
-        factory.isNamespaceAware = true
-        val parser = factory.newSAXParser()
-        parser.parse(file.contentsToByteArray().inputStream(), handler)
-        val attribute = if (handler.isXliff2Detected) {
-            TargetLanguageAttribute.XLIFF20_ROOT
-        } else {
-            TargetLanguageAttribute.XLIFF12_FILE
+        return try {
+            val handler = XliffHandler(xliff12UntranslatedStates, xliff20UntranslatedStates)
+            val factory = SAXParserFactory.newInstance()
+            factory.isNamespaceAware = true
+            val parser = factory.newSAXParser()
+            parser.parse(file.contentsToByteArray().inputStream(), handler)
+            val attribute = if (handler.isXliff2Detected) {
+                TargetLanguageAttribute.XLIFF20_ROOT
+            } else {
+                TargetLanguageAttribute.XLIFF12_FILE
+            }
+            ScanResult(
+                handler.hasUntranslatedUnits,
+                handler.isXliff2Detected,
+                attribute,
+                handler.targetLanguageValue
+            )
+        } catch (e: XliffParseException) {
+            throw e
+        } catch (e: Exception) {
+            throw XliffParseException(file.name, e)
         }
-        return ScanResult(
-            handler.hasUntranslatedUnits,
-            handler.isXliff2Detected,
-            attribute,
-            handler.targetLanguageValue
-        )
     }
 
 

@@ -4,6 +4,7 @@ import com.intellij.mock.MockVirtualFile
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 
@@ -202,7 +203,35 @@ class LightweightXliffScannerTest {
         assertEquals(TargetLanguageAttribute.XLIFF20_ROOT, result.targetLanguageAttribute)
         assertEquals(null, result.targetLanguageValue)
     }
- 
+
+    @Test
+    fun `should wrap malformed xliff as parse exception`() {
+        val mockVirtualFile = MockVirtualFile(
+            "malformed.xlf",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2">
+  <file source-language="en" target-language="fr">
+    <body>
+      <trans-unit id="1">
+        <source>Hello</source>
+        <target>Hello</source>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>"""
+        )
+
+        val exception = assertFailsWith<XliffParseException> {
+            scanner.scan(
+                mockVirtualFile,
+                setOf("no-state_empty-target"),
+                setOf("no-state_empty-target")
+            )
+        }
+
+        assertTrue(exception.toUserMessage().contains("malformed.xlf"))
+    }
+
     @Test
     fun `should not flag fully translated XLIFF 2_0`() {
 

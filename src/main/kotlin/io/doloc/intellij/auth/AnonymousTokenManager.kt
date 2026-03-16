@@ -1,6 +1,7 @@
 package io.doloc.intellij.auth
 
 import com.intellij.openapi.diagnostic.Logger
+import io.doloc.intellij.api.DolocRequestBuilder
 import io.doloc.intellij.http.HttpClientProvider
 import io.doloc.intellij.service.DolocSettingsService
 import kotlinx.serialization.Serializable
@@ -17,7 +18,7 @@ private data class AnonymousTokenResponse(
 
 class AnonymousTokenManager(
     private val settingsService: DolocSettingsService,
-    private val baseUrl: String = "https://api.doloc.io"
+    private val baseUrlProvider: () -> String = { DolocRequestBuilder.getBaseUrl() }
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val log = Logger.getInstance(AnonymousTokenManager::class.java)
@@ -27,17 +28,19 @@ class AnonymousTokenManager(
      * @return API token string
      */
     suspend fun getOrCreateToken(): String {
-        // First check if we already have a token
         val existingToken = settingsService.getStoredAnonymousToken()
         if (!existingToken.isNullOrBlank()) {
             return existingToken
         }
 
-        log.info("No API token found, requesting anonymous token")
+        return createToken()
+    }
 
-        // Create a new anonymous token
+    suspend fun createToken(): String {
+        log.info("Requesting new anonymous token")
+
         val request = HttpRequest.newBuilder()
-            .uri(URI("$baseUrl/token/anonymous"))
+            .uri(URI("${baseUrlProvider()}/token/anonymous"))
             .PUT(HttpRequest.BodyPublishers.noBody())
             .build()
 
@@ -50,10 +53,9 @@ class AnonymousTokenManager(
 
         val tokenResponse = json.decodeFromString<AnonymousTokenResponse>(response.body())
 
-        // Save the new token
         settingsService.setAnonymousToken(tokenResponse.token)
 
-        log.info("Created anonymous token: $tokenResponse")
+        log.info("Created new anonymous token")
         return tokenResponse.token
     }
 }
