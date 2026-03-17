@@ -1,9 +1,9 @@
 package io.doloc.intellij.auth
 
 import io.doloc.intellij.service.DolocSettingsService
+import io.doloc.intellij.test.TestHttpServer
+import io.doloc.intellij.test.TestResponse
 import kotlinx.coroutines.runBlocking
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -14,13 +14,13 @@ import org.mockito.kotlin.whenever
 import kotlin.test.assertEquals
 
 class AnonymousTokenManagerTest {
-    private lateinit var mockWebServer: MockWebServer
+    private lateinit var mockWebServer: TestHttpServer
     private lateinit var mockSettingsService: DolocSettingsService
     private lateinit var tokenManager: AnonymousTokenManager
 
     @Before
     fun setUp() {
-        mockWebServer = MockWebServer()
+        mockWebServer = TestHttpServer()
         mockWebServer.start()
 
         // Create mocked settings service
@@ -29,7 +29,7 @@ class AnonymousTokenManagerTest {
         // Create token manager that points to our mock server
         tokenManager = AnonymousTokenManager(
             settingsService = mockSettingsService,
-            baseUrlProvider = { mockWebServer.url("/").toString().removeSuffix("/") }
+            baseUrlProvider = { mockWebServer.baseUrl }
         )
     }
 
@@ -59,10 +59,11 @@ class AnonymousTokenManagerTest {
         // Mock the server response
         val responseBody = """{"token":"new-anonymous-token","user_id":"1234-1234-1234-1234"}"""
         mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(responseBody)
-                .addHeader("Content-Type", "application/json")
+            TestResponse(
+                statusCode = 200,
+                body = responseBody,
+                headers = mapOf("Content-Type" to "application/json")
+            )
         )
 
         // Execute
@@ -73,7 +74,8 @@ class AnonymousTokenManagerTest {
         verify(mockSettingsService).setAnonymousToken("new-anonymous-token")
 
         // Verify the request
-        val recordedRequest = mockWebServer.takeRequest()
+        val recordedRequest = mockWebServer.takeRequest(5, java.util.concurrent.TimeUnit.SECONDS)
+        kotlin.test.assertNotNull(recordedRequest)
         assertEquals("PUT", recordedRequest.method)
         assertEquals("/token/anonymous", recordedRequest.path)
     }

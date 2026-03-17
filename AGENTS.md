@@ -7,8 +7,8 @@ Operational guide for coding agents working in this repository.
 - Build system: Gradle Kotlin DSL (`build.gradle.kts`).
 - Root package: `io.doloc.intellij`.
 - Plugin descriptor: `src/main/resources/META-INF/plugin.xml`.
-- JVM target: 17.
-- IntelliJ target: `IC 2023.2` (`sinceBuild = 232`).
+- JVM target: 21.
+- IntelliJ target: `IC 2024.3` (`sinceBuild = 243`).
 
 ## 2) Cursor / Copilot Rules
 - No `.cursor/rules/` directory found.

@@ -18,14 +18,13 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        create("IC", "2023.2")
+        create("IC", "2024.3")
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
 
         // Add necessary plugin dependencies for compilation here, example:
         bundledPlugin("com.intellij.modules.json")
     }
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.11.0")
     testImplementation("org.mockito:mockito-core:5.3.1")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.3.1")
     testImplementation(kotlin("test"))
@@ -34,7 +33,7 @@ dependencies {
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "232"
+            sinceBuild = "243"
             untilBuild = provider { null }
         }
     }
@@ -43,11 +42,11 @@ intellijPlatform {
 tasks {
     // Set the JVM compatibility versions
     withType<JavaCompile> {
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
+        sourceCompatibility = "21"
+        targetCompatibility = "21"
     }
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
     }
 
     runIde {

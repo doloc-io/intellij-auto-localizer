@@ -11,15 +11,15 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.doloc.intellij.api.DolocRequestBuilder
 import io.doloc.intellij.service.DolocSettingsService
 import io.doloc.intellij.settings.DolocSettingsState
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
+import io.doloc.intellij.test.TestHttpServer
+import io.doloc.intellij.test.TestResponse
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
 class TranslateWithDolocActionTest : BasePlatformTestCase() {
-    private lateinit var mockWebServer: MockWebServer
+    private lateinit var mockWebServer: TestHttpServer
     private lateinit var originalBaseUrl: String
     private lateinit var tempDir: Path
     private lateinit var xliffFile: VirtualFile
@@ -31,11 +31,11 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         originalBaseUrl = DolocRequestBuilder.getBaseUrl()
 
         // Start mock server
-        mockWebServer = MockWebServer()
+        mockWebServer = TestHttpServer()
         mockWebServer.start()
 
         // Set base URL to mock server using the new API method
-        DolocRequestBuilder.setBaseUrl(mockWebServer.url("/").toString().removeSuffix("/"))
+        DolocRequestBuilder.setBaseUrl(mockWebServer.baseUrl)
 
         // Set a test token in the settings
         val settingsService = DolocSettingsService.getInstance()
@@ -82,9 +82,10 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
             .readText()
 
         mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(translatedContent)
+            TestResponse(
+                statusCode = 200,
+                body = translatedContent
+            )
         )
 
         executeAction()
@@ -109,9 +110,10 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
             javaClass.classLoader.getResource("xliff/fully_translated.xlf")!!.file
         ).readText()
         mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(translatedContent)
+            TestResponse(
+                statusCode = 200,
+                body = translatedContent
+            )
         )
 
         executeAction()
@@ -134,15 +136,17 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
             javaClass.classLoader.getResource("xliff/fully_translated.xlf")!!.file
         ).readText()
         mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody("""{"token":"new-anonymous-token","user_id":"1234-1234-1234-1234"}""")
-                .addHeader("Content-Type", "application/json")
+            TestResponse(
+                statusCode = 200,
+                body = """{"token":"new-anonymous-token","user_id":"1234-1234-1234-1234"}""",
+                headers = mapOf("Content-Type" to "application/json")
+            )
         )
         mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(translatedContent)
+            TestResponse(
+                statusCode = 200,
+                body = translatedContent
+            )
         )
 
         executeAction()
@@ -166,9 +170,10 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
             .readText()
 
         mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(translatedContent)
+            TestResponse(
+                statusCode = 200,
+                body = translatedContent
+            )
         )
 
         executeAction(useVirtualFileArray = false)
@@ -192,20 +197,23 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         ).readText()
 
         mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(401)
-                .setBody("Invalid API token for anonymous user")
+            TestResponse(
+                statusCode = 401,
+                body = "Invalid API token for anonymous user"
+            )
         )
         mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody("""{"token":"refreshed-anon-token","user_id":"1234-1234-1234-1234"}""")
-                .addHeader("Content-Type", "application/json")
+            TestResponse(
+                statusCode = 200,
+                body = """{"token":"refreshed-anon-token","user_id":"1234-1234-1234-1234"}""",
+                headers = mapOf("Content-Type" to "application/json")
+            )
         )
         mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(translatedContent)
+            TestResponse(
+                statusCode = 200,
+                body = translatedContent
+            )
         )
 
         executeAction()
@@ -231,9 +239,10 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
 
     fun testTranslateActionDoesNotRetryManualToken401() {
         mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(401)
-                .setBody("Invalid API token for configured account")
+            TestResponse(
+                statusCode = 401,
+                body = "Invalid API token for configured account"
+            )
         )
 
         executeAction()
@@ -299,7 +308,7 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         val event = AnActionEvent.createFromDataContext("test", null, dataContext)
 
         ApplicationManager.getApplication().runWriteAction {
-            DolocRequestBuilder.setBaseUrl(mockWebServer.url("/").toString().removeSuffix("/"))
+            DolocRequestBuilder.setBaseUrl(mockWebServer.baseUrl)
             action.actionPerformed(event)
         }
     }
