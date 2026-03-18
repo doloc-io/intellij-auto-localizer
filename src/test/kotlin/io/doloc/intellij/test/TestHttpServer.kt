@@ -73,5 +73,8 @@ data class RecordedRequest(
     val headers: Map<String, List<String>>,
     val body: String
 ) {
-    fun getHeader(name: String): String? = headers[name]?.firstOrNull()
+    fun getHeader(name: String): String? = headers.entries
+        .firstOrNull { (headerName, _) -> headerName.equals(name, ignoreCase = true) }
+        ?.value
+        ?.firstOrNull()
 }

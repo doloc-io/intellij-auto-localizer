@@ -2,6 +2,7 @@ package io.doloc.intellij.auth
 
 import com.intellij.openapi.diagnostic.Logger
 import io.doloc.intellij.api.DolocRequestBuilder
+import io.doloc.intellij.api.DolocRequestMetadata
 import io.doloc.intellij.http.HttpClientProvider
 import io.doloc.intellij.service.DolocSettingsService
 import kotlinx.serialization.Serializable
@@ -41,6 +42,8 @@ class AnonymousTokenManager(
 
         val request = HttpRequest.newBuilder()
             .uri(URI("${baseUrlProvider()}/token/anonymous"))
+            .header("User-Agent", DolocRequestMetadata.userAgent())
+            .header(DolocRequestMetadata.VERSION_HEADER_NAME, DolocRequestMetadata.pluginVersion())
             .PUT(HttpRequest.BodyPublishers.noBody())
             .build()
 

@@ -9,8 +9,10 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.MapDataContext
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.doloc.intellij.api.DolocRequestBuilder
+import io.doloc.intellij.api.DolocRequestMetadata
 import io.doloc.intellij.service.DolocSettingsService
 import io.doloc.intellij.settings.DolocSettingsState
+import io.doloc.intellij.test.RecordedRequest
 import io.doloc.intellij.test.TestHttpServer
 import io.doloc.intellij.test.TestResponse
 import java.io.File
@@ -95,6 +97,7 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         assertEquals("POST", recordedRequest?.method)
         assertTrue(recordedRequest?.path?.startsWith("/") ?: false)
         assertEquals("Bearer test-token", recordedRequest?.getHeader("Authorization"))
+        assertPluginHeaders(recordedRequest)
 
         waitForTranslationResult()
     }
@@ -122,6 +125,7 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         assertNotNull("No request was recorded", recordedRequest)
         assertEquals("POST", recordedRequest?.method)
         assertEquals("Bearer anon-token", recordedRequest?.getHeader("Authorization"))
+        assertPluginHeaders(recordedRequest)
 
         waitForTranslationResult()
     }
@@ -155,11 +159,13 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         assertNotNull(tokenRequest)
         assertEquals("PUT", tokenRequest?.method)
         assertEquals("/token/anonymous", tokenRequest?.path)
+        assertPluginHeaders(tokenRequest)
 
         val translationRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
         assertNotNull(translationRequest)
         assertEquals("POST", translationRequest?.method)
         assertEquals("Bearer new-anonymous-token", translationRequest?.getHeader("Authorization"))
+        assertPluginHeaders(translationRequest)
         assertEquals("new-anonymous-token", settingsService.getStoredAnonymousToken())
 
         waitForTranslationResult()
@@ -182,6 +188,7 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         assertNotNull("No request was recorded", recordedRequest)
         assertEquals("POST", recordedRequest?.method)
         assertEquals("Bearer test-token", recordedRequest?.getHeader("Authorization"))
+        assertPluginHeaders(recordedRequest)
 
         waitForTranslationResult()
     }
@@ -222,16 +229,19 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         assertNotNull(firstRequest)
         assertEquals("POST", firstRequest?.method)
         assertEquals("Bearer anon-token", firstRequest?.getHeader("Authorization"))
+        assertPluginHeaders(firstRequest)
 
         val tokenRefreshRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
         assertNotNull(tokenRefreshRequest)
         assertEquals("PUT", tokenRefreshRequest?.method)
         assertEquals("/token/anonymous", tokenRefreshRequest?.path)
+        assertPluginHeaders(tokenRefreshRequest)
 
         val retriedRequest = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
         assertNotNull(retriedRequest)
         assertEquals("POST", retriedRequest?.method)
         assertEquals("Bearer refreshed-anon-token", retriedRequest?.getHeader("Authorization"))
+        assertPluginHeaders(retriedRequest)
         assertEquals("refreshed-anon-token", settingsService.getStoredAnonymousToken())
 
         waitForTranslationResult()
@@ -251,6 +261,7 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         assertNotNull(recordedRequest)
         assertEquals("POST", recordedRequest?.method)
         assertEquals("Bearer test-token", recordedRequest?.getHeader("Authorization"))
+        assertPluginHeaders(recordedRequest)
         assertNull(mockWebServer.takeRequest(1, TimeUnit.SECONDS))
     }
 
@@ -338,6 +349,15 @@ class TranslateWithDolocActionTest : BasePlatformTestCase() {
         assertTrue(
             "File should contain translation state='translated'",
             VfsUtil.loadText(xliffFile).contains("state=\"translated\"")
+        )
+    }
+
+    private fun assertPluginHeaders(request: RecordedRequest?) {
+        val recordedRequest = requireNotNull(request)
+        assertEquals(DolocRequestMetadata.userAgent(), recordedRequest.getHeader("User-Agent"))
+        assertEquals(
+            DolocRequestMetadata.pluginVersion(),
+            recordedRequest.getHeader(DolocRequestMetadata.VERSION_HEADER_NAME)
         )
     }
 }
