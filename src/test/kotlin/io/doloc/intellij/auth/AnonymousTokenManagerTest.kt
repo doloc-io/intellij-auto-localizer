@@ -1,5 +1,6 @@
 package io.doloc.intellij.auth
 
+import io.doloc.intellij.api.DolocRequestMetadata
 import io.doloc.intellij.service.DolocSettingsService
 import io.doloc.intellij.test.TestHttpServer
 import io.doloc.intellij.test.TestResponse
@@ -78,5 +79,10 @@ class AnonymousTokenManagerTest {
         kotlin.test.assertNotNull(recordedRequest)
         assertEquals("PUT", recordedRequest.method)
         assertEquals("/token/anonymous", recordedRequest.path)
+        assertEquals(DolocRequestMetadata.userAgent(), recordedRequest.getHeader("User-Agent"))
+        assertEquals(
+            DolocRequestMetadata.pluginVersion(),
+            recordedRequest.getHeader(DolocRequestMetadata.VERSION_HEADER_NAME)
+        )
     }
 }

@@ -3,6 +3,7 @@ package io.doloc.intellij.arb
 import com.intellij.mock.MockVirtualFile
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.doloc.intellij.api.DolocRequestBuilder
+import io.doloc.intellij.api.DolocRequestMetadata
 import io.doloc.intellij.service.DolocSettingsService
 import io.doloc.intellij.settings.DolocSettingsState
 import java.net.http.HttpRequest
@@ -42,6 +43,11 @@ class ArbRequestBuilderTest : BasePlatformTestCase() {
 
         assertEquals("POST", request.method())
         assertEquals("Bearer test-token", request.headers().firstValue("Authorization").orElse(null))
+        assertEquals(DolocRequestMetadata.userAgent(), request.headers().firstValue("User-Agent").orElse(null))
+        assertEquals(
+            DolocRequestMetadata.pluginVersion(),
+            request.headers().firstValue(DolocRequestMetadata.VERSION_HEADER_NAME).orElse(null)
+        )
         assertTrue(request.uri().toString().contains("untranslated=missing,empty"))
         assertTrue(request.uri().toString().contains("sourceLang=en"))
         assertTrue(request.uri().toString().contains("targetLang=de"))

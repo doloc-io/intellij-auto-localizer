@@ -5,6 +5,7 @@ import io.doloc.intellij.service.DolocSettingsService
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.net.http.HttpRequest
+import java.net.http.HttpRequest.Builder
 
 /**
  * Builds HTTP requests for doloc API
@@ -36,6 +37,7 @@ object DolocRequestBuilder {
             .uri(URI("$BASE_URL$queryString"))
             .header("Authorization", "Bearer $token")
             .header("Accept", "application/octet-stream")
+            .addPluginHeaders()
             .POST(HttpRequest.BodyPublishers.ofByteArray(filePath.contentsToByteArray()))
             .build()
     }
@@ -82,6 +84,7 @@ object DolocRequestBuilder {
             .header("Authorization", "Bearer $token")
             .header("Accept", "application/octet-stream")
             .header("Content-Type", "multipart/form-data; boundary=$boundary")
+            .addPluginHeaders()
             .POST(HttpRequest.BodyPublishers.ofByteArray(body))
             .build()
     }
@@ -116,5 +119,10 @@ object DolocRequestBuilder {
         }
         output.write("--$boundary--\r\n".toByteArray())
         return output.toByteArray()
+    }
+
+    private fun Builder.addPluginHeaders(): Builder {
+        return header("User-Agent", DolocRequestMetadata.userAgent())
+            .header(DolocRequestMetadata.VERSION_HEADER_NAME, DolocRequestMetadata.pluginVersion())
     }
 }
