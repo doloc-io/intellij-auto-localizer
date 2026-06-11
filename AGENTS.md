@@ -16,32 +16,29 @@ Operational guide for coding agents working in this repository.
 - No `.github/copilot-instructions.md` file found.
 - If these files appear later, treat them as repository-specific instructions and follow them.
 
-## 3) Build Tooling Caveat
-- `gradle/wrapper/gradle-wrapper.properties` exists and points to Gradle 8.13.
-- `gradle-wrapper.jar` is not committed, so `./gradlew` fails in a clean clone.
-- Prefer `./gradlew` if wrapper is restored.
-- Otherwise use system `gradle` commands.
-- To regenerate wrapper artifacts locally (if `gradle` exists):
-  - `gradle wrapper --gradle-version 8.13`
+## 3) Build Tooling
+- `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, and `gradle-wrapper.properties` are present.
+- Prefer `./gradlew` from this directory for local commands.
+- CI currently uses system `gradle` through `gradle/gradle-build-action@v3`.
 
 ## 4) Build / Test / Verify Commands
-Use `./gradlew` when available; otherwise replace with `gradle`.
+Use `./gradlew` for local commands unless the environment only provides system `gradle`.
 
 ### Core
-- Build everything: `gradle build`
-- Run all tests: `gradle test`
-- Run full checks: `gradle check`
-- Run IDE sandbox: `gradle runIde`
-- Build plugin ZIP: `gradle buildPlugin`
-- Verify plugin: `gradle verifyPlugin`
+- Build everything: `./gradlew build`
+- Run all tests: `./gradlew test`
+- Run full checks: `./gradlew check`
+- Run IDE sandbox: `./gradlew runIde`
+- Build plugin ZIP: `./gradlew buildPlugin`
+- Verify plugin: `./gradlew verifyPlugin`
 
 ### Single-Test Execution (important)
 - Single class:
-  - `gradle test --tests "io.doloc.intellij.xliff.TargetLanguageHelperTest"`
+  - `./gradlew test --tests "io.doloc.intellij.xliff.TargetLanguageHelperTest"`
 - Single method (stable example without backticks):
-  - `gradle test --tests "io.doloc.intellij.action.TranslateWithDolocActionTest.testTranslateAction"`
+  - `./gradlew test --tests "io.doloc.intellij.action.TranslateWithDolocActionTest.testTranslateAction"`
 - Package or subset wildcard:
-  - `gradle test --tests "io.doloc.intellij.xliff.*"`
+  - `./gradlew test --tests "io.doloc.intellij.xliff.*"`
 
 ### CI Parity
 - CI workflow runs: `gradle test --no-daemon`
@@ -52,8 +49,8 @@ Use `./gradlew` when available; otherwise replace with `gradle`.
 - No repository `.editorconfig` is present.
 - Apply standard Kotlin formatting and keep diffs minimal.
 - At minimum before handing off changes, run:
-  - `gradle test`
-  - `gradle check` (when environment allows)
+  - `./gradlew test`
+  - `./gradlew check` (when environment allows)
 
 ## 6) Architecture Map
 - Translation action entrypoint: `TranslateWithDolocAction`.
@@ -137,6 +134,6 @@ Use `./gradlew` when available; otherwise replace with `gradle`.
 ## 9) Pre-PR Checklist
 - Code compiles (best effort in the current environment).
 - Relevant tests are added/updated.
-- `gradle test` run, or blocked reason is stated explicitly.
+- `./gradlew test` run, or blocked reason is stated explicitly.
 - No credentials/secrets are committed.
 - User-visible behavior changes include plugin metadata/docs updates when appropriate.
