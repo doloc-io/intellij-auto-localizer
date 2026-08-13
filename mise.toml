@@ -1,0 +1,3 @@
+[tools]
+# Match the JDK distribution and major version used by CI.
+java = "temurin-21"
