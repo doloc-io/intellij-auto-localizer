@@ -1,14 +1,18 @@
-# IntelliJ Auto Localizer
+# Auto Localizer: XLIFF and ARB translation for JetBrains IDEs
 
-Auto Localizer is a JetBrains plugin that translates XLIFF (`.xlf`) and ARB (`.arb`) files with one click using the [doloc](https://doloc.io) translation service. 
-It reuses existing translations to produce context-aware results and supports both XLIFF 1.2 and 2.0.
+Auto Localizer is a JetBrains plugin that translates XLIFF (`.xlf`) and ARB (`.arb`) files with one click using the [doloc](https://doloc.io/?utm_source=github&utm_medium=referral&utm_campaign=jetbrains_readme) translation service. 
+Use it for Angular XLIFF or Flutter ARB files while keeping localization in your repository. It uses existing translations as context and supports both XLIFF 1.2 and 2.0.
+
+**Try it with your own file:** install the plugin, right-click an XLIFF or ARB file, and select `Translate with Auto Localizer`. You can start without registering an account.
+
+See the [JetBrains integration guide](https://doloc.io/getting-started/frameworks/intellij-idea/?utm_source=github&utm_medium=referral&utm_campaign=jetbrains_readme) for setup and format-specific details.
 
 ## What It Does
 
 - Adds a `Translate with Auto Localizer` action for XLIFF/ARB files in the Project view
 - Translates segments based on configurable translation states such as `initial` or `new` (or `missing`/`empty` for ARB)
 - Can remind you about untranslated texts when XLIFF/ARB files changes
-- Works for free without registration for files with up to 100 texts
+- Supports free evaluation with an anonymous token; see [current allowances and plans](https://doloc.io/pricing/?utm_source=github&utm_medium=referral&utm_campaign=jetbrains_readme)
 
 ## How To Use It
 
