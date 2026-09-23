@@ -12,7 +12,7 @@ See the [JetBrains integration guide](https://doloc.io/getting-started/framework
 - Adds a `Translate with Auto Localizer` action for XLIFF/ARB files in the Project view
 - Translates segments based on configurable translation states such as `initial` or `new` (or `missing`/`empty` for ARB)
 - Can remind you about untranslated texts when XLIFF/ARB files changes
-- Supports free evaluation with an anonymous token; see [current allowances and plans](https://doloc.io/pricing/?utm_source=github&utm_medium=referral&utm_campaign=jetbrains_readme)
+- Supports forever free with an anonymous token for up to 200 texts; see [current allowances and plans](https://doloc.io/pricing/?utm_source=github&utm_medium=referral&utm_campaign=jetbrains_readme)
 
 ## How To Use It
 
